@@ -1,17 +1,22 @@
 package com.imjpfeliciano.chatnotes.ui;
 
 import com.imjpfeliciano.chatnotes.ChatNotesClient;
+import com.imjpfeliciano.chatnotes.data.Group;
 import com.imjpfeliciano.chatnotes.data.Note;
 import com.imjpfeliciano.chatnotes.data.NoteStore;
 import com.imjpfeliciano.chatnotes.util.AmpersandFormat;
 import com.imjpfeliciano.chatnotes.util.ClipboardUtil;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.CycleButton;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.MultiLineEditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.CommonColors;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Create or edit a single note. Line breaks are collapsed to spaces on save (chat is single-line).
@@ -32,8 +37,10 @@ public class NoteEditScreen extends Screen {
 
     private EditBox titleBox;
     private MultiLineEditBox textBox;
+    private CycleButton<String> groupButton;
     private Button saveButton;
     private int charCountColor = CommonColors.LIGHT_GRAY;
+    private String selectedGroupId = NotesScreen.FILTER_UNGROUPED;
 
     public NoteEditScreen(NotesScreen parent, NoteStore store, Note existing) {
         super(existing == null
@@ -42,6 +49,15 @@ public class NoteEditScreen extends Screen {
         this.parent = parent;
         this.store = store;
         this.existing = existing;
+        if (existing != null && existing.groupId() != null && !existing.groupId().isBlank()) {
+            selectedGroupId = existing.groupId();
+        } else if (existing == null
+                && parent.groupFilter() != null
+                && !NotesScreen.FILTER_ALL.equals(parent.groupFilter())
+                && !NotesScreen.FILTER_UNGROUPED.equals(parent.groupFilter())) {
+            // Creating from a filtered group view defaults the new note into that group.
+            selectedGroupId = parent.groupFilter();
+        }
     }
 
     @Override
@@ -57,6 +73,22 @@ public class NoteEditScreen extends Screen {
             titleBox.setValue(existing.title());
         }
         addRenderableWidget(titleBox);
+
+        y += 20 + PADDING;
+
+        List<String> groupValues = groupOptions();
+        if (!groupValues.contains(selectedGroupId)) {
+            selectedGroupId = NotesScreen.FILTER_UNGROUPED;
+        }
+        groupButton = addRenderableWidget(CycleButton.builder(this::groupLabel, selectedGroupId)
+                .withValues(groupValues)
+                .create(
+                        left,
+                        y,
+                        FIELD_WIDTH,
+                        20,
+                        Component.translatable("screen.chatnotes.field_group"),
+                        (button, value) -> selectedGroupId = value));
 
         y += 20 + PADDING + font.lineHeight + 2;
 
@@ -92,12 +124,33 @@ public class NoteEditScreen extends Screen {
         setInitialFocus(existing == null || existing.title().isBlank() ? titleBox : textBox);
     }
 
+    private List<String> groupOptions() {
+        List<String> values = new ArrayList<>();
+        values.add(NotesScreen.FILTER_UNGROUPED);
+        for (Group group : store.groups()) {
+            values.add(group.id());
+        }
+        return values;
+    }
+
+    private Component groupLabel(String value) {
+        if (NotesScreen.FILTER_UNGROUPED.equals(value)) {
+            return Component.translatable("screen.chatnotes.group_filter_ungrouped");
+        }
+        return store.findGroup(value)
+                .map(group -> Component.literal(group.name()))
+                .orElse(Component.translatable("screen.chatnotes.group_filter_ungrouped"));
+    }
+
+    private String resolvedGroupId() {
+        return NotesScreen.FILTER_UNGROUPED.equals(selectedGroupId) ? null : selectedGroupId;
+    }
+
     private void pasteFromClipboard() {
         String clip = ClipboardUtil.get();
         if (clip == null || clip.isEmpty()) {
             return;
         }
-        // Prefer replacing empty text; otherwise append with a space so existing content is kept.
         String current = textBox.getValue();
         if (current == null || current.isBlank()) {
             textBox.setValue(clip);
@@ -123,17 +176,18 @@ public class NoteEditScreen extends Screen {
             return;
         }
 
+        String groupId = resolvedGroupId();
         Note saved;
         if (existing == null) {
-            saved = store.add(title, text);
+            saved = store.add(title, text, groupId);
             ChatNotesClient.LOGGER.info("[Chat Notes] Added note {} ({} chars).", saved.id(), saved.text().length());
         } else {
-            saved = store.update(existing.id(), title, text).orElse(existing);
+            saved = store.update(existing.id(), title, text, groupId, true).orElse(existing);
             ChatNotesClient.LOGGER.info("[Chat Notes] Updated note {} ({} chars).", saved.id(), saved.text().length());
         }
 
         if (minecraft != null) {
-            minecraft.setScreen(new NotesScreen(store, parent.searchQuery(), saved.id()));
+            minecraft.setScreen(new NotesScreen(store, parent.searchQuery(), saved.id(), parent.groupFilter()));
         }
     }
 

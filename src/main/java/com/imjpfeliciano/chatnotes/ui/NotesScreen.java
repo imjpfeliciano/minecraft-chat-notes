@@ -1,6 +1,7 @@
 package com.imjpfeliciano.chatnotes.ui;
 
 import com.imjpfeliciano.chatnotes.ChatNotesClient;
+import com.imjpfeliciano.chatnotes.data.Group;
 import com.imjpfeliciano.chatnotes.data.Note;
 import com.imjpfeliciano.chatnotes.data.NoteStore;
 import com.imjpfeliciano.chatnotes.util.AmpersandFormat;
@@ -8,6 +9,7 @@ import com.imjpfeliciano.chatnotes.util.ClipboardUtil;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.CycleButton;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.ObjectSelectionList;
 import net.minecraft.client.gui.screens.ChatScreen;
@@ -17,16 +19,22 @@ import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.CommonColors;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Main notes browser: search, select, Copy / Use / Edit / Delete / reorder.
+ * Main notes browser: search, group filter, select, Copy / Use / Edit / Delete / reorder.
  */
 public class NotesScreen extends Screen {
 
+    /** Sentinel for "show every note". */
+    public static final String FILTER_ALL = "__all__";
+    /** Sentinel for notes with no group. */
+    public static final String FILTER_UNGROUPED = "__ungrouped__";
+
     private static final int CHAT_SOFT_LIMIT = 256;
     private static final int TOP = 32;
-    private static final int SEARCH_HEIGHT = 20;
+    private static final int ROW_HEIGHT = 20;
     private static final int BUTTON_HEIGHT = 20;
     private static final int BUTTON_WIDTH = 74;
     private static final int PADDING = 4;
@@ -36,6 +44,7 @@ public class NotesScreen extends Screen {
     private final NoteStore store;
     private String searchQuery;
     private String selectedNoteId;
+    private String groupFilter;
     private String statusMessage = "";
 
     private EditBox searchBox;
@@ -46,31 +55,73 @@ public class NotesScreen extends Screen {
     private Button deleteButton;
     private Button moveUpButton;
     private Button moveDownButton;
+    private Button setDefaultFilterButton;
 
     public NotesScreen(NoteStore store) {
-        this(store, "", null);
+        this(store, "", null, fromStoreFilter(store.defaultGroupFilter()));
     }
 
     public NotesScreen(NoteStore store, String searchQuery, String selectedNoteId) {
+        this(store, searchQuery, selectedNoteId, fromStoreFilter(store.defaultGroupFilter()));
+    }
+
+    public NotesScreen(NoteStore store, String searchQuery, String selectedNoteId, String groupFilter) {
         super(Component.translatable("screen.chatnotes.notes"));
         this.store = store;
         this.searchQuery = searchQuery == null ? "" : searchQuery;
         this.selectedNoteId = selectedNoteId;
+        this.groupFilter = groupFilter == null ? FILTER_ALL : groupFilter;
+    }
+
+    /** Store uses null/"" /id; UI uses FILTER_ALL / FILTER_UNGROUPED / id. */
+    public static String fromStoreFilter(String storeFilter) {
+        if (storeFilter == null) {
+            return FILTER_ALL;
+        }
+        if (storeFilter.isEmpty()) {
+            return FILTER_UNGROUPED;
+        }
+        return storeFilter;
+    }
+
+    static String toStoreFilter(String uiFilter) {
+        if (FILTER_ALL.equals(uiFilter)) {
+            return null;
+        }
+        if (FILTER_UNGROUPED.equals(uiFilter)) {
+            return "";
+        }
+        return uiFilter;
     }
 
     String searchQuery() {
         return searchQuery;
     }
 
+    String groupFilter() {
+        return groupFilter;
+    }
+
+    /** Rebuild after returning from the groups manager so the filter list stays in sync. */
+    NotesScreen withRefreshedGroups() {
+        if (!FILTER_ALL.equals(groupFilter)
+                && !FILTER_UNGROUPED.equals(groupFilter)
+                && store.findGroup(groupFilter).isEmpty()) {
+            groupFilter = FILTER_ALL;
+        }
+        return new NotesScreen(store, searchQuery, selectedNoteId, groupFilter);
+    }
+
     @Override
     protected void init() {
         int footerHeight = FOOTER_ROWS * (BUTTON_HEIGHT + PADDING) + PADDING;
         int searchY = TOP;
-        int listTop = searchY + SEARCH_HEIGHT + PADDING;
+        int filterY = searchY + ROW_HEIGHT + PADDING;
+        int listTop = filterY + ROW_HEIGHT + PADDING;
         int listBottom = height - footerHeight;
         int listHeight = Math.max(LIST_ITEM_HEIGHT, listBottom - listTop);
 
-        searchBox = new EditBox(font, width / 2 - 160, searchY, 240, SEARCH_HEIGHT, Component.translatable("screen.chatnotes.search"));
+        searchBox = new EditBox(font, width / 2 - 160, searchY, 200, ROW_HEIGHT, Component.translatable("screen.chatnotes.search"));
         searchBox.setMaxLength(128);
         searchBox.setHint(Component.translatable("screen.chatnotes.search_hint"));
         searchBox.setValue(searchQuery);
@@ -81,8 +132,35 @@ public class NotesScreen extends Screen {
         addRenderableWidget(searchBox);
 
         addRenderableWidget(Button.builder(Component.translatable("screen.chatnotes.add"), button -> openEditor(null))
-                .bounds(width / 2 + 86, searchY, 74, SEARCH_HEIGHT)
+                .bounds(width / 2 + 46, searchY, 70, ROW_HEIGHT)
                 .build());
+        addRenderableWidget(Button.builder(Component.translatable("screen.chatnotes.groups"), button -> openGroups())
+                .bounds(width / 2 + 120, searchY, 70, ROW_HEIGHT)
+                .build());
+
+        List<String> filterValues = filterOptions();
+        if (!filterValues.contains(groupFilter)) {
+            groupFilter = FILTER_ALL;
+        }
+        addRenderableWidget(CycleButton.builder(this::filterLabel, groupFilter)
+                .withValues(filterValues)
+                .create(
+                        width / 2 - 160,
+                        filterY,
+                        240,
+                        ROW_HEIGHT,
+                        Component.translatable("screen.chatnotes.group_filter"),
+                        (button, value) -> {
+                            groupFilter = value;
+                            updateDefaultFilterButton();
+                            rebuildList();
+                        }));
+        setDefaultFilterButton = addRenderableWidget(Button.builder(
+                        Component.translatable("screen.chatnotes.group_filter_set_default"),
+                        b -> setCurrentFilterAsDefault())
+                .bounds(width / 2 + 86, filterY, 104, ROW_HEIGHT)
+                .build());
+        updateDefaultFilterButton();
 
         list = new NoteList(minecraft, width, listHeight, listTop);
         addRenderableWidget(list);
@@ -115,14 +193,71 @@ public class NotesScreen extends Screen {
                 .build());
 
         updateActionButtons();
-        setInitialFocus(searchBox);
+        // Do not focus the search box on open: EditBox only draws its hint when unfocused and empty.
+    }
+
+    private List<String> filterOptions() {
+        List<String> values = new ArrayList<>();
+        values.add(FILTER_ALL);
+        values.add(FILTER_UNGROUPED);
+        for (Group group : store.groups()) {
+            values.add(group.id());
+        }
+        return values;
+    }
+
+    private Component filterLabel(String value) {
+        Component base;
+        if (FILTER_ALL.equals(value)) {
+            base = Component.translatable("screen.chatnotes.group_filter_all");
+        } else if (FILTER_UNGROUPED.equals(value)) {
+            base = Component.translatable("screen.chatnotes.group_filter_ungrouped");
+        } else {
+            base = store.findGroup(value)
+                    .map(group -> Component.literal(group.name()))
+                    .orElse(Component.translatable("screen.chatnotes.group_filter_all"));
+        }
+        if (value.equals(fromStoreFilter(store.defaultGroupFilter()))) {
+            return Component.translatable("screen.chatnotes.group_filter_default_mark", base);
+        }
+        return base;
+    }
+
+    private void setCurrentFilterAsDefault() {
+        store.setDefaultGroupFilter(toStoreFilter(groupFilter));
+        statusMessage = Component.translatable("screen.chatnotes.group_filter_default_saved").getString();
+        updateDefaultFilterButton();
+        // Rebuild widgets so the cycle button label picks up the ★ mark.
+        rebuildWidgets();
+    }
+
+    private void updateDefaultFilterButton() {
+        if (setDefaultFilterButton == null) {
+            return;
+        }
+        boolean alreadyDefault = groupFilter.equals(fromStoreFilter(store.defaultGroupFilter()));
+        setDefaultFilterButton.active = !alreadyDefault;
+        setDefaultFilterButton.setMessage(Component.translatable(
+                alreadyDefault
+                        ? "screen.chatnotes.group_filter_is_default"
+                        : "screen.chatnotes.group_filter_set_default"));
+    }
+
+    private String storeGroupFilter() {
+        if (FILTER_ALL.equals(groupFilter)) {
+            return null;
+        }
+        if (FILTER_UNGROUPED.equals(groupFilter)) {
+            return "";
+        }
+        return groupFilter;
     }
 
     private void rebuildList() {
         if (list == null) {
             return;
         }
-        List<Note> notes = store.search(searchQuery);
+        List<Note> notes = store.search(searchQuery, storeGroupFilter());
         list.replaceEntries(notes.stream().map(NoteEntry::new).toList());
 
         NoteEntry match = null;
@@ -146,6 +281,10 @@ public class NotesScreen extends Screen {
         return entry == null ? null : entry.note;
     }
 
+    private boolean canReorder() {
+        return searchQuery.isBlank() && FILTER_ALL.equals(groupFilter);
+    }
+
     private void updateActionButtons() {
         boolean hasSelection = selectedNote() != null;
         if (useButton != null) {
@@ -153,8 +292,8 @@ public class NotesScreen extends Screen {
             copyButton.active = hasSelection;
             editButton.active = hasSelection;
             deleteButton.active = hasSelection;
-            moveUpButton.active = hasSelection && searchQuery.isBlank();
-            moveDownButton.active = hasSelection && searchQuery.isBlank();
+            moveUpButton.active = hasSelection && canReorder();
+            moveDownButton.active = hasSelection && canReorder();
         }
     }
 
@@ -163,6 +302,12 @@ public class NotesScreen extends Screen {
             return;
         }
         minecraft.setScreen(new NoteEditScreen(this, store, note));
+    }
+
+    private void openGroups() {
+        if (minecraft != null) {
+            minecraft.setScreen(new GroupsScreen(this, store));
+        }
     }
 
     private void onCopy() {
@@ -199,13 +344,13 @@ public class NotesScreen extends Screen {
                 }
                 ChatNotesClient.LOGGER.info("[Chat Notes] Deleted note {}.", note.id());
             }
-            minecraft.setScreen(new NotesScreen(store, searchQuery, selectedNoteId));
+            minecraft.setScreen(new NotesScreen(store, searchQuery, selectedNoteId, groupFilter));
         }, title, message));
     }
 
     private void onMove(int direction) {
         Note note = selectedNote();
-        if (note == null || !searchQuery.isBlank()) {
+        if (note == null || !canReorder()) {
             return;
         }
         boolean moved = direction < 0 ? store.moveUp(note.id()) : store.moveDown(note.id());
@@ -243,7 +388,7 @@ public class NotesScreen extends Screen {
                     CommonColors.GREEN);
         }
         if (list != null && list.children().isEmpty()) {
-            Component empty = searchQuery.isBlank()
+            Component empty = searchQuery.isBlank() && FILTER_ALL.equals(groupFilter)
                     ? Component.translatable("screen.chatnotes.empty")
                     : Component.translatable("screen.chatnotes.no_matches");
             graphics.drawCenteredString(font, empty, width / 2, height / 2 - 10, CommonColors.LIGHT_GRAY);
@@ -271,7 +416,6 @@ public class NotesScreen extends Screen {
             return Math.min(340, width - 40);
         }
 
-        // Package-visible bridge so entries can keep the selected row on screen after rebuilds.
         void ensureVisible(NoteEntry entry) {
             scrollToEntry(entry);
         }
@@ -306,6 +450,20 @@ public class NotesScreen extends Screen {
                 rightEdge -= 4;
             }
 
+            String groupLabel = groupBadgeLabel(note);
+            if (groupLabel != null) {
+                String clipped = font.plainSubstrByWidth(groupLabel, 90);
+                int padX = 3;
+                int badgeW = font.width(clipped) + padX * 2;
+                int badgeH = font.lineHeight + 2;
+                int badgeX = rightEdge - badgeW;
+                int badgeY = y + 1;
+                graphics.fill(badgeX, badgeY, badgeX + badgeW, badgeY + badgeH, 0xAA2A2A2A);
+                graphics.renderOutline(badgeX, badgeY, badgeW, badgeH, 0x66FFFFFF);
+                graphics.drawString(font, clipped, badgeX + padX, badgeY + 1, 0xFFC8C8C8);
+                rightEdge = badgeX - 4;
+            }
+
             int textWidth = Math.max(16, rightEdge - (x + 4));
             if (note.title().isBlank()) {
                 AmpersandFormat.drawClipped(graphics, font, note.text(), x + 4, y + 2, textWidth, CommonColors.WHITE);
@@ -321,6 +479,15 @@ public class NotesScreen extends Screen {
                         rowWidth - 8,
                         CommonColors.LIGHT_GRAY);
             }
+        }
+
+        /** Group name for the row badge, or null when ungrouped (no badge). */
+        private String groupBadgeLabel(Note note) {
+            String groupId = note.groupId();
+            if (groupId == null || groupId.isBlank()) {
+                return null;
+            }
+            return store.findGroup(groupId).map(Group::name).orElse(null);
         }
 
         @Override
