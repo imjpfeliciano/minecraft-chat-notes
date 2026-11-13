@@ -6,7 +6,7 @@ The mod never needs to be installed on a server, sends nothing over the network 
 
 ## Status
 
-Phase 3 MVP UI in progress: press **K** for search, list, Add/Edit/Delete, Copy/Use, and reorder. See [plans/](plans) for the full roadmap.
+Phase 4 polish in progress: coloured `&`-code list previews, `§` warnings, and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). See [plans/](plans) for the full roadmap.
 
 ## Toolchain
 
@@ -39,13 +39,16 @@ src/main/java/com/imjpfeliciano/chatnotes/
 ├── input/KeyBindings.java # default K; only place that touches KeyMapping
 ├── ui/NotesScreen.java    # list, search, Copy / Use / Edit / Delete / reorder
 ├── ui/NoteEditScreen.java # create / edit a note
-└── util/ClipboardUtil.java
+└── util/                 # ClipboardUtil, AmpersandFormat (preview)
+docs/ARCHITECTURE.md
 src/main/resources/
 ├── fabric.mod.json
 └── assets/chatnotes/      # icon + lang/en_us.json
 ```
 
 No mixins. The mod is built entirely on public Minecraft and Fabric API surfaces.
+
+Ampersand colour codes are previewed in the UI only. Vanilla chat does not colour `&` codes — your multiplayer server’s chat plugin does that after you send.
 
 Notes are stored at `config/chatnotes/notes.json` (under the game directory; for `runClient` that is `run/config/…`).
 
