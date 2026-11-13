@@ -1,0 +1,9 @@
+{
+  "key.chatnotes.open": "Open Chat Notes",
+  "screen.chatnotes.notes": "Chat Notes",
+  "screen.chatnotes.copy": "Copy",
+  "screen.chatnotes.use": "Use",
+  "screen.chatnotes.empty": "No notes yet.",
+  "screen.chatnotes.copied": "Copied to clipboard",
+  "screen.chatnotes.char_count": "%s characters"
+}

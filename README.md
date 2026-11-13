@@ -6,7 +6,7 @@ The mod never needs to be installed on a server, sends nothing over the network 
 
 ## Status
 
-Phase 0 complete: the project builds and the dev client launches with the mod loaded. See [plans/](plans) for the full roadmap.
+Phase 2 vertical slice in progress: press **K** in-world to open a bare notes screen with **Copy** / **Use** against the first note on disk. See [plans/](plans) for the full roadmap.
 
 ## Toolchain
 
@@ -34,13 +34,19 @@ The dev client writes its game files to `run/`, which is git-ignored.
 
 ```
 src/main/java/com/imjpfeliciano/chatnotes/
-└── ChatNotesClient.java   # ClientModInitializer entry point
+├── ChatNotesClient.java   # ClientModInitializer: loads store, registers keybind
+├── data/                  # Note / Group / NoteStore / NoteStoreFile (no Minecraft imports)
+├── input/KeyBindings.java # default K; only place that touches KeyMapping
+├── ui/NotesScreen.java    # Phase 2 bare screen (Copy / Use)
+└── util/ClipboardUtil.java
 src/main/resources/
-├── fabric.mod.json        # mod metadata, client-only
-└── assets/chatnotes/      # icon, and later the lang files
+├── fabric.mod.json
+└── assets/chatnotes/      # icon + lang/en_us.json
 ```
 
 No mixins. The mod is built entirely on public Minecraft and Fabric API surfaces.
+
+Notes are stored at `config/chatnotes/notes.json` (under the game directory; for `runClient` that is `run/config/…`).
 
 ## License
 
