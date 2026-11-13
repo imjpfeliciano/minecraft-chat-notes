@@ -1,5 +1,13 @@
 # Chat Notes
 
+<p align="center">
+  <img src="chat-notes-logo.png" alt="Chat Notes logo" width="160" height="160" />
+</p>
+
+<p align="center">
+  <strong>Personal chat snippet library for Fabric</strong> — save <code>&</code>-coloured messages, copy them, or drop them into chat without auto-sending.
+</p>
+
 A client-only Fabric mod for Minecraft **1.21.11**. It keeps a personal library of chat snippets (typically messages with `&`-style color codes generated elsewhere) so you can **Copy** one to the system clipboard or **Use** it, which opens the chat box with the text already filled in, ready for you to review and send.
 
 The mod never needs to be installed on a server, sends nothing over the network by itself, and never modifies the text you stored.
@@ -7,6 +15,49 @@ The mod never needs to be installed on a server, sends nothing over the network 
 ## Status
 
 Phase 5 groups in progress: single-level folders with filter, create/rename/delete, and per-note group assignment. See [plans/](plans) for the full roadmap.
+
+## Screenshots
+
+Capture guide and exact filenames: [media/screenshots/SCREENSHOTS.md](media/screenshots/SCREENSHOTS.md).
+
+| Notes list |
+|:---:|
+| ![Notes list](media/screenshots/01-notes-list.png) |
+
+| Search / group filter |
+|:---:|
+| ![Search and filter](media/screenshots/02-search-and-filter.png) |
+
+| Note editor |
+|:---:|
+| ![Note editor](media/screenshots/03-note-editor.png) |
+
+| Use → chat pre-filled |
+|:---:|
+| ![Use in chat](media/screenshots/04-use-in-chat.gif) |
+
+| Groups |
+|:---:|
+| ![Groups screen](media/screenshots/05-groups-screen.png) |
+
+| Copy |
+|:---:|
+| ![Copy](media/screenshots/06-copy-clipboard.png) |
+
+## Store listing
+
+Ready-to-paste Modrinth / CurseForge / GitHub blurb (EN + ES): [media/STORE_DESCRIPTION.md](media/STORE_DESCRIPTION.md).
+
+**One-liner:** Personal library of chat snippets for Fabric — save `&`-coloured messages, copy them, or drop them into chat without auto-sending.
+
+## Features
+
+- **Use** / **Copy** without auto-send  
+- Add, edit, delete, reorder, search  
+- Groups + default filter  
+- Coloured `&` / hex preview in the UI  
+- Global storage (`config/chatnotes/notes.json`) across all worlds/servers on that install  
+- UI languages: English, Español (México), Español (España)
 
 ## Toolchain
 
@@ -33,16 +84,20 @@ The dev client writes its game files to `run/`, which is git-ignored.
 ## Layout
 
 ```
+chat-notes-logo.png          # project / store logo
+media/
+├── STORE_DESCRIPTION.md     # Modrinth / CurseForge copy
+└── screenshots/             # gallery PNGs (see SCREENSHOTS.md)
 src/main/java/com/imjpfeliciano/chatnotes/
-├── ChatNotesClient.java   # ClientModInitializer: loads store, registers keybind
-├── data/                  # Note / Group / NoteStore / NoteStoreFile (no Minecraft imports)
-├── input/KeyBindings.java # default K; only place that touches KeyMapping
-├── ui/                   # NotesScreen, NoteEditScreen, GroupsScreen, group edit/delete
-└── util/                 # ClipboardUtil, AmpersandFormat (preview)
+├── ChatNotesClient.java
+├── data/
+├── input/
+├── ui/
+└── util/
 docs/ARCHITECTURE.md
 src/main/resources/
 ├── fabric.mod.json
-└── assets/chatnotes/      # icon + lang (en_us, es_mx, es_es)
+└── assets/chatnotes/        # icon.png + lang (en_us, es_mx, es_es)
 ```
 
 No mixins. The mod is built entirely on public Minecraft and Fabric API surfaces.
