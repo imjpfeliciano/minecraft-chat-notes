@@ -1,0 +1,106 @@
+# Manually publish a GitHub Release from the Actions tab.
+# Actions → release → Run workflow → enter version (e.g. 0.1.1).
+# This bumps mod_version, pushes a v* tag, builds the remapped JAR, and attaches it to the release.
+
+name: release
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version without v prefix (e.g. 0.1.1)'
+        required: true
+        type: string
+      prerelease:
+        description: 'Mark GitHub Release as prerelease'
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: release-${{ inputs.version }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          # Push the version bump + tag back to the branch selected in "Run workflow".
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: validate version
+        id: version
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid version '$VERSION'. Use semver like 0.1.1 or 0.2.0-beta.1" >&2
+            exit 1
+          fi
+          git fetch --tags --force
+          if git rev-parse "v${VERSION}" >/dev/null 2>&1; then
+            echo "Tag v${VERSION} already exists" >&2
+            exit 1
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=v${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: bump mod_version and tag
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          if grep -q "^mod_version=${VERSION}$" gradle.properties; then
+            echo "mod_version already ${VERSION}"
+          else
+            sed -i "s/^mod_version=.*/mod_version=${VERSION}/" gradle.properties
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add gradle.properties
+            git commit -m "chore(release): bump mod_version to ${VERSION}"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          fi
+          git tag -a "$TAG" -m "Chat Notes ${VERSION}"
+          git push origin "$TAG"
+
+      - name: validate gradle wrapper
+        uses: gradle/actions/wrapper-validation@v4
+
+      - name: setup jdk
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'microsoft'
+
+      - name: make gradle wrapper executable
+        run: chmod +x ./gradlew
+
+      - name: build
+        run: ./gradlew build -Pmod_version=${{ steps.version.outputs.version }}
+
+      - name: select remapped jar
+        id: jar
+        run: |
+          jar=$(find build/libs -maxdepth 1 -type f -name 'chatnotes-*.jar' ! -name '*-sources.jar' | head -n 1)
+          if [ -z "$jar" ]; then
+            echo "No remapped chatnotes JAR found in build/libs" >&2
+            ls -la build/libs || true
+            exit 1
+          fi
+          echo "path=$jar" >> "$GITHUB_OUTPUT"
+          echo "Selected $jar"
+
+      - name: create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: Chat Notes ${{ steps.version.outputs.version }}
+          generate_release_notes: true
+          prerelease: ${{ inputs.prerelease }}
+          files: ${{ steps.jar.outputs.path }}
