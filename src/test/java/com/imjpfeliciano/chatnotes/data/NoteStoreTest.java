@@ -1,0 +1,155 @@
+package com.imjpfeliciano.chatnotes.data;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import java.io.IOException;
+import java.nio.file.Path;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+class NoteStoreTest {
+
+    private static final Instant CREATED = Instant.parse("2026-11-13T12:00:00Z");
+    private static final Instant EDITED = Instant.parse("2026-11-14T08:30:00Z");
+
+    @TempDir
+    Path dir;
+
+    private Path file;
+
+    @BeforeEach
+    void setUp() {
+        file = dir.resolve("chatnotes").resolve("notes.json");
+    }
+
+    private NoteStore store(Instant now) throws IOException {
+        return NoteStore.open(file, Clock.fixed(now, ZoneOffset.UTC));
+    }
+
+    @Test
+    void addedNotesSurviveReopening() throws IOException {
+        NoteStore store = store(CREATED);
+        store.add("Zeus kit", "&lVENDO &e&lKIT ZEUS &a&l550K");
+
+        List<Note> reloaded = store(CREATED).notes();
+
+        assertEquals(1, reloaded.size());
+        assertEquals("&lVENDO &e&lKIT ZEUS &a&l550K", reloaded.get(0).text());
+        assertEquals(CREATED, reloaded.get(0).createdAt());
+    }
+
+    @Test
+    void updateChangesContentAndTimestampButKeepsIdAndCreatedAt() throws IOException {
+        NoteStore store = store(CREATED);
+        Note original = store.add("Old", "old text");
+
+        Note updated = store(EDITED).update(original.id(), "New", "new text").orElseThrow();
+
+        assertEquals(original.id(), updated.id());
+        assertEquals(CREATED, updated.createdAt());
+        assertEquals(EDITED, updated.updatedAt());
+        assertEquals("new text", updated.text());
+    }
+
+    @Test
+    void deleteRemovesTheNoteAndClosesTheGapInOrder() throws IOException {
+        NoteStore store = store(CREATED);
+        store.add("", "a");
+        Note second = store.add("", "b");
+        store.add("", "c");
+
+        assertTrue(store.delete(second.id()));
+        assertFalse(store.delete(second.id()));
+
+        List<Note> remaining = store(CREATED).notes();
+        assertEquals(List.of("a", "c"), remaining.stream().map(Note::text).toList());
+        assertEquals(List.of(0, 1), remaining.stream().map(Note::order).toList());
+    }
+
+    @Test
+    void movingReordersAndPersists() throws IOException {
+        NoteStore store = store(CREATED);
+        store.add("", "a");
+        Note b = store.add("", "b");
+        store.add("", "c");
+
+        assertTrue(store.moveUp(b.id()));
+        assertEquals(List.of("b", "a", "c"), store.notes().stream().map(Note::text).toList());
+
+        assertTrue(store.moveDown(b.id()));
+        assertEquals(List.of("a", "b", "c"), store(CREATED).notes().stream().map(Note::text).toList());
+    }
+
+    @Test
+    void movingPastTheEdgeOfTheListDoesNothing() throws IOException {
+        NoteStore store = store(CREATED);
+        Note first = store.add("", "a");
+        Note last = store.add("", "b");
+
+        assertFalse(store.moveUp(first.id()));
+        assertFalse(store.moveDown(last.id()));
+        assertFalse(store.moveUp("no-such-id"));
+        assertEquals(List.of("a", "b"), store.notes().stream().map(Note::text).toList());
+    }
+
+    @Test
+    void searchMatchesTitleAndTextCaseInsensitivelyAndEmptyQueryMatchesAll() throws IOException {
+        NoteStore store = store(CREATED);
+        store.add("Shop", "&lVENDO kit");
+        store.add("Greeting", "hola mundo");
+
+        assertEquals(List.of("Shop"), titles(store.search("vendo")));
+        assertEquals(List.of("Shop"), titles(store.search("SHOP")));
+        assertEquals(List.of("Greeting"), titles(store.search("mundo")));
+        assertEquals(List.of("Shop", "Greeting"), titles(store.search("")));
+        assertEquals(List.of(), titles(store.search("nothing here")));
+    }
+
+    @Test
+    void lineBreaksAreCollapsedBecauseChatIsSingleLine() throws IOException {
+        NoteStore store = store(CREATED);
+
+        Note note = store.add("", "line one\n  line two\r\nline three");
+
+        assertEquals("line one line two line three", note.text());
+    }
+
+    @Test
+    void groupIdRoundTripsEvenThoughTheUiDoesNotUseItYet() throws IOException {
+        NoteStore store = store(CREATED);
+        Note note = store.add("Ad", "text", "group-1");
+
+        assertEquals("group-1", store(CREATED).find(note.id()).orElseThrow().groupId());
+    }
+
+    @Test
+    void aCorruptFileIsReportedSoTheUiCanWarnInsteadOfShowingAnEmptyList() throws IOException {
+        java.nio.file.Files.createDirectories(file.getParent());
+        java.nio.file.Files.writeString(file, "not json at all");
+
+        NoteStore store = store(CREATED);
+
+        assertTrue(store.recoveredFrom().isPresent());
+        assertEquals(List.of(), store.notes());
+    }
+
+    @Test
+    void displayLabelFallsBackToTheTextWhenThereIsNoTitle() throws IOException {
+        NoteStore store = store(CREATED);
+
+        assertEquals("Titled", store.add("Titled", "body").displayLabel());
+        assertEquals("body only", store.add("", "body only").displayLabel());
+    }
+
+    private static List<String> titles(List<Note> notes) {
+        return notes.stream().map(Note::title).toList();
+    }
+}
