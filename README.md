@@ -6,7 +6,7 @@ The mod never needs to be installed on a server, sends nothing over the network 
 
 ## Status
 
-Phase 2 vertical slice in progress: press **K** in-world to open a bare notes screen with **Copy** / **Use** against the first note on disk. See [plans/](plans) for the full roadmap.
+Phase 3 MVP UI in progress: press **K** for search, list, Add/Edit/Delete, Copy/Use, and reorder. See [plans/](plans) for the full roadmap.
 
 ## Toolchain
 
@@ -37,7 +37,8 @@ src/main/java/com/imjpfeliciano/chatnotes/
 ├── ChatNotesClient.java   # ClientModInitializer: loads store, registers keybind
 ├── data/                  # Note / Group / NoteStore / NoteStoreFile (no Minecraft imports)
 ├── input/KeyBindings.java # default K; only place that touches KeyMapping
-├── ui/NotesScreen.java    # Phase 2 bare screen (Copy / Use)
+├── ui/NotesScreen.java    # list, search, Copy / Use / Edit / Delete / reorder
+├── ui/NoteEditScreen.java # create / edit a note
 └── util/ClipboardUtil.java
 src/main/resources/
 ├── fabric.mod.json
