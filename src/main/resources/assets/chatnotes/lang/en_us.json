@@ -24,5 +24,7 @@
   "screen.chatnotes.field_text": "Message",
   "screen.chatnotes.field_text_hint": "Paste or type the chat message…",
   "screen.chatnotes.paste": "Paste",
-  "screen.chatnotes.save": "Save"
+  "screen.chatnotes.save": "Save",
+  "screen.chatnotes.section_sign_marker": "!",
+  "screen.chatnotes.section_sign_warning": "Contains section-sign (§) — sending this in chat can disconnect you. Prefer & codes."
 }

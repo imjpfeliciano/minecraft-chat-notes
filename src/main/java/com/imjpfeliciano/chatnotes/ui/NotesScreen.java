@@ -3,6 +3,7 @@ package com.imjpfeliciano.chatnotes.ui;
 import com.imjpfeliciano.chatnotes.ChatNotesClient;
 import com.imjpfeliciano.chatnotes.data.Note;
 import com.imjpfeliciano.chatnotes.data.NoteStore;
+import com.imjpfeliciano.chatnotes.util.AmpersandFormat;
 import com.imjpfeliciano.chatnotes.util.ClipboardUtil;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -224,12 +225,21 @@ public class NotesScreen extends Screen {
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         super.render(graphics, mouseX, mouseY, partialTick);
         graphics.drawCenteredString(font, title, width / 2, 12, CommonColors.WHITE);
-        if (!statusMessage.isEmpty()) {
+        int footerTop = height - FOOTER_ROWS * (BUTTON_HEIGHT + PADDING);
+        Note selected = selectedNote();
+        if (selected != null && AmpersandFormat.containsSectionSign(selected.text())) {
+            graphics.drawCenteredString(
+                    font,
+                    Component.translatable("screen.chatnotes.section_sign_warning"),
+                    width / 2,
+                    footerTop - font.lineHeight - 2,
+                    CommonColors.SOFT_RED);
+        } else if (!statusMessage.isEmpty()) {
             graphics.drawCenteredString(
                     font,
                     statusMessage,
                     width / 2,
-                    height - FOOTER_ROWS * (BUTTON_HEIGHT + PADDING) - font.lineHeight,
+                    footerTop - font.lineHeight - 2,
                     CommonColors.GREEN);
         }
         if (list != null && list.children().isEmpty()) {
@@ -280,25 +290,36 @@ public class NotesScreen extends Screen {
             int y = getContentY();
             int rowWidth = getContentWidth();
 
-            String titleText = note.title().isBlank() ? note.text() : note.title();
-            String titleLine = font.plainSubstrByWidth(titleText, rowWidth - 8);
-            graphics.drawString(font, titleLine, x + 4, y + 2, CommonColors.WHITE);
-
-            String previewSource = note.title().isBlank() ? "" : note.text();
-            if (!previewSource.isBlank()) {
-                String preview = font.plainSubstrByWidth(previewSource, rowWidth - 8);
-                graphics.drawString(font, preview, x + 4, y + 2 + font.lineHeight + 1, CommonColors.LIGHT_GRAY);
+            int rightEdge = x + rowWidth - 4;
+            if (AmpersandFormat.containsSectionSign(note.text())) {
+                Component bang = Component.translatable("screen.chatnotes.section_sign_marker");
+                rightEdge -= font.width(bang);
+                graphics.drawString(font, bang, rightEdge, y + 2, CommonColors.SOFT_RED);
+                rightEdge -= 4;
             }
 
             int length = note.text().length();
             if (length > CHAT_SOFT_LIMIT) {
                 Component count = Component.translatable("screen.chatnotes.char_count", length);
-                graphics.drawString(
+                rightEdge -= font.width(count);
+                graphics.drawString(font, count, rightEdge, y + 2, CommonColors.SOFT_RED);
+                rightEdge -= 4;
+            }
+
+            int textWidth = Math.max(16, rightEdge - (x + 4));
+            if (note.title().isBlank()) {
+                AmpersandFormat.drawClipped(graphics, font, note.text(), x + 4, y + 2, textWidth, CommonColors.WHITE);
+            } else {
+                String titleLine = font.plainSubstrByWidth(note.title(), textWidth);
+                graphics.drawString(font, titleLine, x + 4, y + 2, CommonColors.WHITE);
+                AmpersandFormat.drawClipped(
+                        graphics,
                         font,
-                        count,
-                        x + rowWidth - font.width(count) - 4,
-                        y + 2,
-                        CommonColors.SOFT_RED);
+                        note.text(),
+                        x + 4,
+                        y + 2 + font.lineHeight + 1,
+                        rowWidth - 8,
+                        CommonColors.LIGHT_GRAY);
             }
         }
 

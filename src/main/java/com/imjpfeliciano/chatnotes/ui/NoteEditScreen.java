@@ -3,6 +3,7 @@ package com.imjpfeliciano.chatnotes.ui;
 import com.imjpfeliciano.chatnotes.ChatNotesClient;
 import com.imjpfeliciano.chatnotes.data.Note;
 import com.imjpfeliciano.chatnotes.data.NoteStore;
+import com.imjpfeliciano.chatnotes.util.AmpersandFormat;
 import com.imjpfeliciano.chatnotes.util.ClipboardUtil;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
@@ -59,7 +60,8 @@ public class NoteEditScreen extends Screen {
 
         y += 20 + PADDING + font.lineHeight + 2;
 
-        int textHeight = Math.max(80, height - y - 70);
+        // Leave room for counter, optional § warning, coloured preview, and buttons.
+        int textHeight = Math.max(80, height - y - 100);
         textBox = MultiLineEditBox.builder()
                 .setX(left)
                 .setY(y)
@@ -152,7 +154,30 @@ public class NoteEditScreen extends Screen {
 
         String raw = textBox == null ? "" : textBox.getValue();
         String normalized = Note.normalizeText(raw);
+        int metaY = height - 28 - font.lineHeight - 4;
+
         Component counter = Component.translatable("screen.chatnotes.char_counter", normalized.length(), CHAT_SOFT_LIMIT);
-        graphics.drawString(font, counter, left, height - 28 - font.lineHeight - 4, charCountColor);
+        graphics.drawString(font, counter, left, metaY, charCountColor);
+
+        if (AmpersandFormat.containsSectionSign(normalized)) {
+            graphics.drawString(
+                    font,
+                    Component.translatable("screen.chatnotes.section_sign_warning"),
+                    left,
+                    metaY - font.lineHeight - 2,
+                    CommonColors.SOFT_RED);
+            metaY -= font.lineHeight + 2;
+        }
+
+        if (!normalized.isBlank()) {
+            AmpersandFormat.drawClipped(
+                    graphics,
+                    font,
+                    normalized,
+                    left,
+                    metaY - font.lineHeight - 2,
+                    FIELD_WIDTH,
+                    CommonColors.WHITE);
+        }
     }
 }
