@@ -37,7 +37,8 @@ class NoteStoreFileTest {
         String colored = "&lVENDO &e&lKIT ZEUS &a&l550K";
         NotesDocument document = new NotesDocument(1,
                 List.of(new Group("g1", "Shop ads", 0)),
-                List.of(new Note("n1", "Zeus kit", colored, "g1", 0, now, now)));
+                List.of(new Note("n1", "Zeus kit", colored, "g1", 0, now, now)),
+                null);
 
         NoteStoreFile.save(notesFile(), document);
         NotesDocument loaded = NoteStoreFile.load(notesFile()).document();
@@ -118,7 +119,7 @@ class NoteStoreFileTest {
         NoteStoreFile.save(notesFile(), new NotesDocument(1, List.of(), List.of(
                 new Note("c", "", "third", null, 2, now, now),
                 new Note("a", "", "first", null, 0, now, now),
-                new Note("b", "", "second", null, 1, now, now))));
+                new Note("b", "", "second", null, 1, now, now)), null));
 
         List<Note> loaded = NoteStoreFile.load(notesFile()).document().notes();
 
@@ -127,6 +128,6 @@ class NoteStoreFileTest {
 
     private static NotesDocument documentWithText(String text) {
         Instant now = Instant.parse("2026-11-13T12:00:00Z");
-        return new NotesDocument(1, List.of(), List.of(new Note("n1", "", text, null, 0, now, now)));
+        return new NotesDocument(1, List.of(), List.of(new Note("n1", "", text, null, 0, now, now)), null);
     }
 }

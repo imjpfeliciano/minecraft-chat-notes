@@ -16,7 +16,11 @@ public record Group(String id, String name, int order) {
     }
 
     public static Group create(String name, int order) {
-        return new Group(UUID.randomUUID().toString(), name, order);
+        return new Group(UUID.randomUUID().toString(), name == null ? "" : name.trim(), order);
+    }
+
+    public Group withName(String name) {
+        return new Group(id, name == null ? "" : name.trim(), order);
     }
 
     public Group withOrder(int order) {

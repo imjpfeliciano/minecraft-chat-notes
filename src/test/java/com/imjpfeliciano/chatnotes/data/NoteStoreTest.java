@@ -123,11 +123,81 @@ class NoteStoreTest {
     }
 
     @Test
-    void groupIdRoundTripsEvenThoughTheUiDoesNotUseItYet() throws IOException {
+    void groupIdRoundTripsThroughSave() throws IOException {
         NoteStore store = store(CREATED);
-        Note note = store.add("Ad", "text", "group-1");
+        Group group = store.addGroup("Shop ads");
+        Note note = store.add("Ad", "text", group.id());
 
-        assertEquals("group-1", store(CREATED).find(note.id()).orElseThrow().groupId());
+        assertEquals(group.id(), store(CREATED).find(note.id()).orElseThrow().groupId());
+        assertEquals("Shop ads", store(CREATED).findGroup(group.id()).orElseThrow().name());
+    }
+
+    @Test
+    void searchCanFilterByGroupOrUngrouped() throws IOException {
+        NoteStore store = store(CREATED);
+        Group shop = store.addGroup("Shop");
+        store.add("A", "one", shop.id());
+        store.add("B", "two", null);
+        store.add("C", "three", shop.id());
+
+        assertEquals(List.of("A", "C"), titles(store.search("", shop.id())));
+        assertEquals(List.of("B"), titles(store.search("", "")));
+        assertEquals(List.of("A", "B", "C"), titles(store.search("", null)));
+        assertEquals(List.of("A"), titles(store.search("one", shop.id())));
+    }
+
+    @Test
+    void renamingAndDeletingGroups() throws IOException {
+        NoteStore store = store(CREATED);
+        Group shop = store.addGroup("Shop");
+        Group farm = store.addGroup("Farm");
+        Note kept = store.add("Ad", "shop text", shop.id());
+        Note orphan = store.add("Farm ad", "farm text", farm.id());
+
+        assertEquals("Shop ads", store.renameGroup(shop.id(), "Shop ads").orElseThrow().name());
+
+        assertTrue(store.deleteGroup(farm.id(), false));
+        assertEquals(null, store.find(orphan.id()).orElseThrow().groupId());
+        assertTrue(store.findGroup(farm.id()).isEmpty());
+
+        assertTrue(store.deleteGroup(shop.id(), true));
+        assertTrue(store.find(kept.id()).isEmpty());
+        assertEquals(1, store.notes().size());
+        assertEquals(orphan.id(), store.notes().get(0).id());
+    }
+
+    @Test
+    void defaultGroupFilterPersistsAndClearsWhenGroupIsDeleted() throws IOException {
+        NoteStore store = store(CREATED);
+        Group shop = store.addGroup("Shop");
+
+        store.setDefaultGroupFilter(shop.id());
+        assertEquals(shop.id(), store(CREATED).defaultGroupFilter());
+
+        store(CREATED).setDefaultGroupFilter("");
+        assertEquals("", store(CREATED).defaultGroupFilter());
+
+        store(CREATED).setDefaultGroupFilter(null);
+        assertEquals(null, store(CREATED).defaultGroupFilter());
+
+        NoteStore again = store(CREATED);
+        Group farm = again.addGroup("Farm");
+        again.setDefaultGroupFilter(farm.id());
+        again.deleteGroup(farm.id(), false);
+        assertEquals(null, store(CREATED).defaultGroupFilter());
+    }
+
+    @Test
+    void updateCanChangeGroupMembership() throws IOException {
+        NoteStore store = store(CREATED);
+        Group shop = store.addGroup("Shop");
+        Note note = store.add("Ad", "text", null);
+
+        Note moved = store.update(note.id(), "Ad", "text", shop.id(), true).orElseThrow();
+        assertEquals(shop.id(), moved.groupId());
+
+        Note cleared = store.update(note.id(), "Ad", "text", null, true).orElseThrow();
+        assertEquals(null, cleared.groupId());
     }
 
     @Test
