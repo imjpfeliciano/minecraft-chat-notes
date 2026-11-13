@@ -6,7 +6,7 @@ The mod never needs to be installed on a server, sends nothing over the network 
 
 ## Status
 
-Phase 4 polish in progress: coloured `&`-code list previews, `§` warnings, and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). See [plans/](plans) for the full roadmap.
+Phase 5 groups in progress: single-level folders with filter, create/rename/delete, and per-note group assignment. See [plans/](plans) for the full roadmap.
 
 ## Toolchain
 
@@ -37,20 +37,29 @@ src/main/java/com/imjpfeliciano/chatnotes/
 ├── ChatNotesClient.java   # ClientModInitializer: loads store, registers keybind
 ├── data/                  # Note / Group / NoteStore / NoteStoreFile (no Minecraft imports)
 ├── input/KeyBindings.java # default K; only place that touches KeyMapping
-├── ui/NotesScreen.java    # list, search, Copy / Use / Edit / Delete / reorder
-├── ui/NoteEditScreen.java # create / edit a note
+├── ui/                   # NotesScreen, NoteEditScreen, GroupsScreen, group edit/delete
 └── util/                 # ClipboardUtil, AmpersandFormat (preview)
 docs/ARCHITECTURE.md
 src/main/resources/
 ├── fabric.mod.json
-└── assets/chatnotes/      # icon + lang/en_us.json
+└── assets/chatnotes/      # icon + lang (en_us, es_mx, es_es)
 ```
 
 No mixins. The mod is built entirely on public Minecraft and Fabric API surfaces.
 
+## Languages
+
+UI strings follow the game language (Options → Language):
+
+- `en_us` — English
+- `es_mx` — Español (México)
+- `es_es` — Español (España)
+
+Stored note titles/text are never translated; only the mod UI is.
+
 Ampersand colour codes are previewed in the UI only. Vanilla chat does not colour `&` codes — your multiplayer server’s chat plugin does that after you send.
 
-Notes are stored at `config/chatnotes/notes.json` (under the game directory; for `runClient` that is `run/config/…`).
+Notes are stored **once globally** at `config/chatnotes/notes.json` (under the game directory; for `runClient` that is `run/config/…`). The same library is available on every singleplayer world and multiplayer server — nothing is stored per server.
 
 ## License
 
