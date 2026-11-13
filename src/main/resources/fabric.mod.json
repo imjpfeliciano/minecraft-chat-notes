@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "chatnotes",
+  "version": "${version}",
+  "name": "Chat Notes",
+  "description": "A personal library of chat snippets. Store formatted messages and copy them to the clipboard or drop them straight into the chat box.",
+  "authors": [
+    "Jonathan Peraza Feliciano"
+  ],
+  "license": "MIT",
+  "icon": "assets/chatnotes/icon.png",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "com.imjpfeliciano.chatnotes.ChatNotesClient"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.18.2",
+    "minecraft": "~1.21.11",
+    "java": ">=21",
+    "fabric-api": "*"
+  }
+}
