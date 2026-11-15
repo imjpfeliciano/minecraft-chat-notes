@@ -1,0 +1,215 @@
+# Chat Notes: multi-version port architecture (26.3 Fabric first)
+
+*Supersedes the single-version targeting in [Chat Notes (Fabric 1.21.11) Implementation Plan.md](<Chat Notes (Fabric 1.21.11) Implementation Plan.md>). That document remains the reference for goals, data model, UX spec and the acceptance checklist.*
+
+**Goal:** restructure Chat Notes into a monorepo with a version-independent core plus one thin module per Minecraft version and loader, port to **26.3 Fabric** first, then clone that port to 26.2 and 26.1 by overriding two small hooks. NeoForge and Forge stay out of scope but the structure must make them cheap.
+
+## What the research found
+
+Facts verified against `piston-meta.mojang.com`, `meta.fabricmc.net`, the Modrinth Fabric API index, `FabricMC/fabric-example-mod`, and direct class-file inspection of the 26.1 / 26.2 / 26.3 client jars.
+
+**26.x is a platform change, not a version bump:**
+
+- Minecraft 26.1, 26.2, 26.3 (and 26.1.1 / 26.1.2) are **unobfuscated**. The version manifest has no `client_mappings` entry and Fabric publishes intermediary `0.0.0` as a placeholder. `mappings loom.officialMojangMappings()` must be **removed**.
+- The Loom plugin changes from `net.fabricmc.fabric-loom-remap` to **`net.fabricmc.fabric-loom`** (`1.19-SNAPSHOT`), and dependencies are declared with `implementation`, not `modImplementation`.
+- **Java 25** is required (`javaVersion.majorVersion = 25`, `java-runtime-epsilon`), with `options.release = 25` and Gradle **9.8.2**.
+- `net.minecraft.client.gui.GuiGraphics` **no longer exists**. Screens override `extractRenderState(GuiGraphicsExtractor, int, int, float)`; list rows override `extractContent(GuiGraphicsExtractor, int, int, boolean, float)`. Drawing calls are renamed: `drawString` to `text`, `drawCenteredString` to `centeredText`, `renderOutline` to `outline`, `renderBackground` to `extractBackground`. `fill` keeps its shape. Every one of the five screens is affected.
+- Fabric API renamed the keybind helper: `net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper.registerKeyBinding` becomes `net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper.registerKeyMapping`. `ClientTickEvents` and `FabricLoader.getConfigDir()` are unchanged.
+
+**26.1 to 26.3 are nearly identical for this mod.** A full signature diff of every class Chat Notes touches found only two relevant differences, which is what makes the inheritance model cheap:
+
+- `Minecraft.setScreen(Screen)` exists in 26.1 but moved to `Minecraft.gui.setScreen(Screen)` in 26.2+ (the `Minecraft.screen` field is gone).
+- `ChatFormatting.isColor()`, `getColor()`, `getChar()`, `getId()`, `getByName()`, `getById()` and the codecs were deleted in 26.2+. Only `getByCode(char)`, `values()`, `stripFormatting()` and `PREFIX_CODE` survive. `AmpersandFormat` uses `isColor()` today.
+
+Unchanged across 26.1 to 26.3 and therefore safe in shared code: `ObjectSelectionList(Minecraft, int, int, int, int)`, `mouseClicked(MouseButtonEvent, boolean)`, `ChatScreen(String, boolean)`, `ConfirmScreen(BooleanConsumer, Component, Component)`, `EditBox`, `MultiLineEditBox.builder()`, `CycleButton.builder(...).withValues(...).create(...)`, `Button.builder(...).bounds(...).build()`, `CommonColors`, `Font.substrByWidth` / `plainSubstrByWidth`, `Language.getVisualOrder`, `Style.applyLegacyFormat` / `applyFormat`, `TextColor.fromRgb`, `KeyMapping(String, InputConstants.Type, int, KeyMapping.Category)`, `KeyboardHandler.getClipboard` / `setClipboard`.
+
+**Verified per-version toolchain values:**
+
+- 26.3: loader `0.20.1`, Fabric API `0.166.2+26.3`, Loom `1.19-SNAPSHOT`, Java 25
+- 26.2: loader `0.20.1`, Fabric API `0.161.0+26.2`, Loom `1.19-SNAPSHOT`, Java 25
+- 26.1: loader `0.20.1`, Fabric API `0.155.3+26.1.2` (covers 26.1, 26.1.1, 26.1.2), Loom `1.19-SNAPSHOT`, Java 25
+- 1.21.11 (existing): loader `0.18.2`, Fabric API `0.139.4+1.21.11` (latest is `0.141.6+1.21.11`), Loom `1.14-SNAPSHOT` with `fabric-loom-remap`, Java 21
+
+## Target structure
+
+A monorepo. One pure-Java core, shared source directories per API era and per loader, and one thin module per version-and-loader combination.
+
+```
+chat-notes/
+├── settings.gradle            # include ':core' + ':versions:fabric-26.1|26.2|26.3'
+│                              # includeBuild 'versions/fabric-1.21.11'  (isolated: needs the other Loom plugin)
+├── gradle.properties          # mod_version, maven_group, archives_base_name
+├── core/                      # plain java-library, release 21, JUnit 5. No Minecraft, no loader imports.
+│   └── src/main/java/com/imjpfeliciano/chatnotes/core/
+│       ├── data/              # Note, Group, NoteStore, NoteStoreFile, NotesDocument (moved as-is)
+│       ├── text/              # AmpersandParser -> List<TextSpan>; no ChatFormatting dependency
+│       ├── model/             # NotesViewModel, GroupsViewModel, GroupFilter sentinels + rules
+│       ├── render/            # Painter, TextMeasurer, Translator SPIs + NotesPainting/GroupsPainting
+│       └── platform/          # ClipboardAccess, ConfigPaths, ModLog SPIs
+├── shared/
+│   ├── mc26/src/main/java/      # abstract Screens for 26.1-26.3 (vanilla API only, zero loader imports)
+│   ├── mc121/src/main/java/     # abstract Screens for 1.21.x (GuiGraphics era)
+│   ├── fabric26/src/main/java/  # Fabric glue for 26.x: KeyMappingHelper, ClientTickEvents, FabricLoader
+│   ├── fabric121/src/main/java/ # Fabric glue for 1.21.x: KeyBindingHelper
+│   └── resources/               # assets/chatnotes/lang/*.json + icon.png
+└── versions/
+    ├── fabric-26.3/           # build.gradle, gradle.properties, fabric.mod.json, ~5 concrete classes
+    ├── fabric-26.2/
+    ├── fabric-26.1/
+    └── fabric-1.21.11/        # own settings.gradle (separate build), same core
+```
+
+```mermaid
+flowchart TB
+    Core["core (pure Java, tested)"]
+    MC26["shared/mc26 (abstract Screens, 26.x API)"]
+    MC121["shared/mc121 (abstract Screens, GuiGraphics API)"]
+    Fab26["shared/fabric26 (Fabric glue)"]
+    Fab121["shared/fabric121 (Fabric glue)"]
+    V263["versions/fabric-26.3"]
+    V262["versions/fabric-26.2"]
+    V261["versions/fabric-26.1"]
+    V121["versions/fabric-1.21.11"]
+    Neo["versions/neoforge-26.3 (future)"]
+
+    Core --> MC26
+    Core --> MC121
+    MC26 --> Fab26
+    MC121 --> Fab121
+    Fab26 --> V263
+    Fab26 --> V262
+    Fab26 --> V261
+    Fab121 --> V121
+    MC26 --> Neo
+```
+
+Sharing happens at **source level**, not through a published jar: each version module adds the directories it needs as extra `srcDirs`, so everything is recompiled against its own Minecraft and a future breaking change fails loudly at compile time in exactly one place.
+
+```gradle
+// versions/fabric-26.3/build.gradle
+def shared = "$rootDir"   // for versions/fabric-1.21.11 this is "$rootDir/../.."
+sourceSets.main {
+    java.srcDirs += ["$shared/core/src/main/java",
+                     "$shared/shared/mc26/src/main/java",
+                     "$shared/shared/fabric26/src/main/java"]
+    resources.srcDirs += ["$shared/shared/resources"]
+}
+```
+
+`:core` stays a real Gradle module so its tests run once, fast, without Loom or Minecraft. Its classes are compiled a second time into each mod jar via `srcDirs`, which avoids shading and jar-in-jar entirely. Nothing depends on or publishes the core jar. The alternative, `project(':core')` plus the Shadow plugin, was rejected: it adds a shading step and a Loom `remapJar` interaction for no benefit at this size.
+
+`versions/fabric-1.21.11` must be an `includeBuild`, not a subproject: `fabric-loom-remap` 1.14 and `fabric-loom` 1.19 cannot share one buildscript classpath. The three 26.x modules share Loom 1.19 and live in the root build as ordinary subprojects.
+
+## The version seam
+
+Everything version-sensitive is reduced to a handful of abstract hooks. `core/render/Painter` is the one that absorbs the `GuiGraphics` removal:
+
+```java
+public interface Painter {
+    void text(String text, int x, int y, int argb);
+    void centeredText(String text, int centerX, int y, int argb);
+    void spans(List<TextSpan> spans, int x, int y, int maxWidth, int fallbackArgb);
+    void fill(int x1, int y1, int x2, int y2, int argb);
+    void outline(int x, int y, int width, int height, int argb);
+}
+```
+
+`shared/mc26` implements it over `GuiGraphicsExtractor`, `shared/mc121` over `GuiGraphics`. The abstract screens in `shared/mc26` then expose exactly two hooks for the 26.1-versus-26.2 split:
+
+- `protected abstract void openScreen(Screen screen);` — 26.1 uses `minecraft.setScreen(s)`, 26.2 and 26.3 use `minecraft.gui.setScreen(s)`
+- `protected abstract Screen chatScreenWith(String text);` — currently `new ChatScreen(text, false)` everywhere, kept as cheap insurance
+
+The `ChatFormatting.isColor()` deletion is solved in core rather than per version: `AmpersandParser` resolves `&`-codes into `TextSpan` records carrying an RGB int plus style flags, so no version layer ever asks Minecraft to classify a formatting code. This also makes the trickiest logic in the mod (`&#RRGGBB`, `&x&R&R&G&G&B&B`) unit-testable without a client.
+
+## Phases
+
+Each phase ends at a green, shippable state. Do not start a phase before the previous gate passes.
+
+### Phase 0 — Environment and toolchain verification
+
+No code. Confirm the ground truth, because the current machine has **no JDK installed at all** (`java`, `javap`, `~/.gradle/jdks`, `/opt` are all empty), and Gradle's toolchain auto-download needs a resolver plugin that this repo does not have.
+
+1. Install or locate **JDK 25** and **JDK 21**; record `JAVA_HOME`.
+2. Add `id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'` to the root `settings.gradle` `plugins` block, or confirm both JDKs are discoverable, otherwise `toolchain { languageVersion = 25 }` fails.
+3. Bump `gradle/wrapper/gradle-wrapper.properties` to `gradle-9.8.2-bin.zip` and re-run `./gradlew --version`.
+4. In a scratch directory, generate or copy `FabricMC/fabric-example-mod` at 26.3 and run `./gradlew build` once to prove the `fabric-loom` 1.19 toolchain works on this machine before touching Chat Notes.
+
+Gate: `./gradlew build` succeeds on the unmodified current repo with JDK 21, and the 26.3 example mod builds with JDK 25.
+
+### Phase 1 — Monorepo skeleton, no behaviour change
+
+1. `git mv` the current `src/`, `build.gradle`, `gradle.properties` (version-specific keys only) into `versions/fabric-1.21.11/`, and give it its own `settings.gradle` with the Fabric `pluginManagement` repositories.
+2. Root `settings.gradle`: `rootProject.name = 'chat-notes'`, `include ':core'`, `includeBuild 'versions/fabric-1.21.11'`. Keep one wrapper at the root.
+3. Root `gradle.properties` keeps `mod_version`, `maven_group`, `archives_base_name`; each version module keeps its own `minecraft_version`, `loader_version`, `loom_version`, `fabric_version`.
+4. Add a root aggregator task: `tasks.register('buildAll') { dependsOn gradle.includedBuild('fabric-1.21.11').task(':build') }`, extended as modules land.
+5. Set `version = "${mod_version}+${minecraft_version}"` in each version module so jars are self-describing (`chatnotes-0.2.0+1.21.11.jar`).
+
+Gate: `./gradlew buildAll` produces the same 1.21.11 jar as before, `./gradlew :core:test` runs (empty core is fine), and `git log --follow` still tracks the moved files.
+
+### Phase 2 — Extract the core and refactor 1.21.11 onto it
+
+This is the phase that proves the abstraction before any port exists. Target: no Minecraft import outside `shared/` and `versions/`.
+
+1. Move `data/` into `core/.../core/data/` unchanged, along with both existing test classes (`NoteStoreTest`, `NoteStoreFileTest`). It already has no Minecraft imports.
+2. Split `util/AmpersandFormat.java`: the parser becomes `core/text/AmpersandParser` returning `List<TextSpan>` (RGB plus style flags, no `ChatFormatting`); `containsSectionSign` moves to core as-is; `drawClipped` becomes `Painter.spans(...)`.
+3. Introduce the core SPIs: `Painter`, `TextMeasurer` (`width(String)`, `lineHeight()`, `clip(String, int)`), `Translator` (`tr(String key, Object... args)`), `ClipboardAccess`, `ConfigPaths`, `ModLog`.
+4. Pull the pure rules out of the screens into `core/model`: the `FILTER_ALL` / `FILTER_UNGROUPED` sentinel mapping and `fromStoreFilter` / `toStoreFilter` (`ui/NotesScreen.java` lines 77-95), `canReorder()`, the 256-char soft-limit colouring, the default-filter star label rule, and the group badge resolution. Draw bodies move into `core/render/NotesPainting` and `GroupsPainting`, which take a `Painter` plus a `TextMeasurer`.
+5. Create `shared/mc121` with `GuiGraphicsPainter` and the abstract screens, and `shared/fabric121` with the `ClientModInitializer` bootstrap plus `KeyBindingHelper` registration. `versions/fabric-1.21.11` keeps only concrete subclasses, `fabric.mod.json`, and build config.
+6. Add core tests for the new logic: hex and legacy-hex parsing, `§` detection, span styling, filter sentinel round-trips, reorder gating, soft-limit colouring. Add a guard test or Gradle check that fails if any file under `core/` contains `import net.minecraft` or `import net.fabricmc`.
+
+Gate: `./gradlew :core:test` green, `./gradlew buildAll` green, and the **full manual QA matrix below passes on 1.21.11** with an existing `notes.json` loaded unchanged.
+
+### Phase 3 — The 26.3 Fabric port
+
+1. Create `versions/fabric-26.3/` with `plugins { id 'net.fabricmc.fabric-loom' version '1.19-SNAPSHOT' }`, no `mappings` line, `implementation` (not `modImplementation`) for loader and API, `options.release = 25`, toolchain 25, and the `loom { mods { "chatnotes" { sourceSet sourceSets.main } } }` block (confirm it still exists in the non-remap plugin).
+2. `fabric.mod.json`: `"minecraft": "~26.3"`, `"java": ">=25"`, `"fabricloader": ">=0.20.1"`, `"environment": "client"`, same id, icon and entrypoint shape as today.
+3. Create `shared/mc26`: `ExtractorPainter` over `GuiGraphicsExtractor` (`text`, `centeredText`, `fill`, `outline`), plus abstract `AbstractNotesScreen`, `AbstractNoteEditScreen`, `AbstractGroupsScreen`, `AbstractGroupEditScreen`, `AbstractGroupDeleteScreen`. Conversions to apply: `render` to `extractRenderState`, `renderBackground` to `extractBackground`, `Entry.renderContent` to `Entry.extractContent`, and `super.render(...)` to `super.extractRenderState(...)`.
+4. Create `shared/fabric26`: client entrypoint, `KeyMappingHelper.registerKeyMapping` with `KeyMapping.Category.MISC`, the `ClientTickEvents.END_CLIENT_TICK` plus `consumeClick()` loop, `FabricLoader.getInstance().getConfigDir()` for `ConfigPaths`, and `Minecraft.getInstance().keyboardHandler` for `ClipboardAccess`.
+5. Add the ~5 concrete classes in `versions/fabric-26.3/` that implement `openScreen(Screen)` as `minecraft.gui.setScreen(s)` and `chatScreenWith(text)` as `new ChatScreen(text, false)`.
+6. Register the module in the root `settings.gradle` and in `buildAll`.
+
+Verify as you go, cheaply: the 26.x jars are unobfuscated, so `javap -cp ~/.gradle/caches/.../client.jar net.minecraft.client.gui.GuiGraphicsExtractor` answers any signature question directly, with no mappings step. Treat `./gradlew :versions:fabric-26.3:compileJava` as the real check. Two semantics to confirm rather than assume: `outline(x, y, w, h, argb)` matches the old `renderOutline` argument order (not `fill`'s corner pairs), and `extractor.text(...)` has the same shadow behaviour as `drawString` (there are `boolean` overloads).
+
+Gate: `:versions:fabric-26.3:build` green, `:versions:fabric-26.3:runClient` launches, and the full manual QA matrix passes on 26.3.
+
+### Phase 4 — 26.2 and 26.1
+
+1. Copy `versions/fabric-26.3/` to `versions/fabric-26.2/`, change `minecraft_version=26.2` and `fabric_version=0.161.0+26.2`, and `"minecraft": "~26.2"`. The hooks are identical to 26.3.
+2. Copy again for 26.1 with `fabric_version=0.155.3+26.1.2` and `"minecraft": ">=26.1 <26.2"` so 26.1.1 and 26.1.2 are covered. Override `openScreen` to `minecraft.setScreen(s)` — this is the one real divergence.
+3. If 26.1 turns up any additional break, fix it by adding a hook to `shared/mc26`, never by forking the shared file.
+
+Gate: all three modules build, each `runClient` launches on its own version, and the QA matrix passes on 26.1 and 26.2.
+
+### Phase 5 — CI, release, docs
+
+1. `.github/workflows/build.yml`: matrix over `[fabric-1.21.11, fabric-26.1, fabric-26.2, fabric-26.3]` with `java-version: [21, 25]` paired per module, plus a `:core:test` job that needs no Minecraft.
+2. `.github/workflows/release.yml`: build every module, attach one jar per version, keep the single `mod_version` bump in the root `gradle.properties`.
+3. Rewrite `docs/ARCHITECTURE.md` for the new module graph, and add `docs/PORTING.md` as the playbook: how to add a version (copy the newest module, bump four properties, compile, fix hooks) and how to add a loader.
+4. Update `README.md`: supported versions, the per-version toolchain list, and the new `./gradlew :versions:fabric-26.3:runClient` commands.
+
+### Phase 6 — Loader-readiness audit
+
+1. Assert mechanically that `shared/mc26` contains no `net.fabricmc` import; this is the property that makes a NeoForge module cheap.
+2. Write down what a `versions/neoforge-26.3` module would supply: the mod entrypoint, keybind registration, a config directory, and a tick hook, all behind the existing `core/platform` SPIs. No code yet.
+
+## Manual QA matrix (run per version, there is no automated UI test)
+
+Data: start from a `notes.json` written by the current 1.21.11 build and confirm it loads untouched; then confirm a file written by 26.3 still loads on 1.21.11. Path stays `config/chatnotes/notes.json` (`run/config/...` under `runClient`).
+
+- Keybind: **K** in-world opens the notes screen; nothing happens on the title screen; rebinding in Controls works and the binding sits under Miscellaneous.
+- List: rows render title plus coloured preview, group badge, the `>256` char count, and the `§` marker; the empty state and the no-matches state both show.
+- Search: live filtering as you type; the hint shows while unfocused and empty; move up and down are disabled while filtering.
+- Group filter: cycle button lists All, Ungrouped and every group; set-as-default persists and the star mark appears; the button disables when already default.
+- Notes: add, edit, delete through the vanilla confirm screen, reorder, and selection surviving a save.
+- Copy: clipboard receives the exact stored bytes, no re-encoding.
+- Use: chat opens pre-filled with the exact stored text and **nothing is sent**; double-clicking a row does the same.
+- Editor: title and multi-line text fields, character counter colour flip at 256, `§` warning, Paste appends, line breaks collapse to a single space on save.
+- Groups: create, rename, delete with reassignment, accent colours, and note counts.
+- i18n: `en_us`, `es_mx`, `es_es` all render with no raw translation keys.
+- Resize the window on every screen to confirm `init()` and `repositionElements()` still lay out correctly.
+
+## Risks
+
+- `loom_version=1.19-SNAPSHOT` is a moving target, as `1.14-SNAPSHOT` is today. Pin to a release as soon as one is published, and expect CI to need `maven.fabricmc.net` reachable on every build.
+- 26.4 snapshots already exist, and 26.3 moved `RenderPipeline` into `com.mojang.renderpearl`. Chat Notes does not touch that package, but the next port should re-run the signature diff before assuming `shared/mc26` still covers it.
+- Phase 2 is the only phase that can regress a shipped version. Keep it a separate PR from Phase 3 so a 1.21.11 regression is bisectable.
