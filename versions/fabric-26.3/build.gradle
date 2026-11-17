@@ -25,6 +25,7 @@ repositories {
 }
 
 loom {
+	accessWidenerPath = file("src/main/resources/chatnotes.accesswidener")
 	mods {
 		"chatnotes" {
 			sourceSet sourceSets.main
