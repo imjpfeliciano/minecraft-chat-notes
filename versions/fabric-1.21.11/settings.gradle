@@ -1,0 +1,27 @@
+pluginManagement {
+	repositories {
+		maven {
+			name = 'Fabric'
+			url = 'https://maven.fabricmc.net/'
+		}
+		mavenCentral()
+		gradlePluginPortal()
+	}
+}
+
+rootProject.name = 'fabric-1.21.11'
+
+// An included build does not inherit the root gradle.properties, so mod_version and friends
+// have to be read off disk. Anything already set here or passed with -P wins, which keeps
+// `./gradlew build -Pmod_version=1.2.3` working from either build.
+Properties shared = new Properties()
+file('../../gradle.properties').withInputStream { shared.load(it) }
+
+gradle.beforeProject { project ->
+	shared.each { key, value ->
+		String name = key.toString()
+		if (!name.startsWith('org.gradle.') && !project.hasProperty(name)) {
+			project.ext.set(name, value)
+		}
+	}
+}

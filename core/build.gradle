@@ -1,0 +1,35 @@
+// Version-independent logic. No Minecraft, no loader, no Loom: this module exists so the
+// data and text layers can be unit tested once, in seconds, without launching a client.
+//
+// The version modules do not depend on this jar. They add core/src/main/java as an extra
+// srcDir and recompile it against their own Minecraft, which avoids shading entirely.
+plugins {
+	id 'java-library'
+}
+
+group = project.maven_group
+
+repositories {
+	mavenCentral()
+}
+
+dependencies {
+	testImplementation platform("org.junit:junit-bom:${project.junit_version}")
+	testImplementation "org.junit.jupiter:junit-jupiter"
+	testRuntimeOnly "org.junit.platform:junit-platform-launcher"
+}
+
+tasks.withType(JavaCompile).configureEach {
+	// 21 is the floor across every supported version, so core stays loadable everywhere.
+	it.options.release = 21
+}
+
+java {
+	toolchain {
+		languageVersion = JavaLanguageVersion.of(21)
+	}
+}
+
+test {
+	useJUnitPlatform()
+}
