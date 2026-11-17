@@ -149,6 +149,50 @@ class FormattedDocumentTest {
     }
 
     @Test
+    void turningBoldOffKeepsTheColour() {
+        FormattedDocument doc = FormattedDocument.parse("&e&lHi");
+        doc.apply(0, 2, TextFormat.BOLD);
+        assertEquals("&eHi", doc.serialize());
+    }
+
+    @Test
+    void anEmptyBoldToggleTurnsOffTheNextCharacters() {
+        FormattedDocument doc = FormattedDocument.parse("&lHi");
+        doc.apply(2, 2, TextFormat.BOLD);
+        doc.insert(2, "!");
+        assertEquals("&lHi&r!", doc.serialize());
+    }
+
+    @Test
+    void aCaretStyleSurvivesADeleteBeforeItAndDropsWhenTheDeleteCoversIt() {
+        FormattedDocument kept = FormattedDocument.parse("Hello");
+        kept.apply(5, 5, TextFormat.YELLOW);
+        kept.delete(0, 1);
+        kept.insert(4, "!");
+        assertEquals("ello&e!", kept.serialize());
+
+        FormattedDocument dropped = FormattedDocument.parse("Hello");
+        dropped.apply(2, 2, TextFormat.YELLOW);
+        dropped.delete(1, 3);
+        dropped.insert(1, "X");
+        assertEquals("HXlo", dropped.serialize());
+    }
+
+    @Test
+    void aLiteralSectionSignIsEscapedAndASectionCodePasteRewritesToAmpersand() {
+        FormattedDocument literal = FormattedDocument.parse("A");
+        literal.insert(1, "§");
+        assertEquals("A§", literal.plain());
+        assertEquals("A§§", literal.serialize());
+        assertEquals("A§§", FormattedDocument.parse(literal.serialize()).serialize());
+
+        FormattedDocument pasted = FormattedDocument.parse("");
+        pasted.paste(0, "§cHi");
+        assertEquals("Hi", pasted.plain());
+        assertEquals("&cHi", pasted.serialize());
+    }
+
+    @Test
     void anEmptySelectionDoesNotRewriteTheStringAndTypesWithTheCaretStyle() {
         FormattedDocument doc = FormattedDocument.parse("&eHello");
         doc.apply(5, 5, TextFormat.BOLD);
