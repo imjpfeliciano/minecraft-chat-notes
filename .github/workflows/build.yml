@@ -1,8 +1,7 @@
 # Build every supported version on pull requests and pushes.
 # The Gradle daemon is Java 25 for every job: configuring the 26.x modules applies
-# Loom 1.19, which refuses to resolve on a Java 21 daemon. `java` below is the
-# compile toolchain for that module. 21 is installed alongside 25 wherever a
-# toolchain asks for it, so CI does not have to download a JDK from foojay.
+# Loom 1.19, which refuses to resolve on a Java 21 daemon. Every job installs
+# both 21 and 25, because the root build configures every module.
 
 name: build
 on: [pull_request, push]
@@ -37,18 +36,12 @@ jobs:
         include:
           - module: fabric-1.21.11
             task: :fabric-1.21.11:build
-            java: |
-              21
-              25
           - module: fabric-26.1
             task: :versions:fabric-26.1:build
-            java: '25'
           - module: fabric-26.2
             task: :versions:fabric-26.2:build
-            java: '25'
           - module: fabric-26.3
             task: :versions:fabric-26.3:build
-            java: '25'
     steps:
       - name: checkout repository
         uses: actions/checkout@v4
@@ -57,7 +50,9 @@ jobs:
       - name: setup jdk
         uses: actions/setup-java@v4
         with:
-          java-version: ${{ matrix.java }}
+          java-version: |
+            21
+            25
           distribution: 'temurin'
       - name: make gradle wrapper executable
         run: chmod +x ./gradlew
