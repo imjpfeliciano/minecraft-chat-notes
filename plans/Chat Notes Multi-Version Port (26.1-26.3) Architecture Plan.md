@@ -225,12 +225,18 @@ What landed:
 
 Gate: **both modules build and were played.** 26.2 `runClient` reached client init, and in that session a note was added, two groups were created, and notes were updated. The full click-through matrix was not re-run.
 
-### Phase 5 — CI, release, docs
+### Phase 5 — CI, release, docs — **done**
 
 1. `.github/workflows/build.yml`: matrix over `[fabric-1.21.11, fabric-26.1, fabric-26.2, fabric-26.3]` with `java-version: [21, 25]` paired per module, plus a `:core:test` job that needs no Minecraft.
 2. `.github/workflows/release.yml`: build every module, attach one jar per version, keep the single `mod_version` bump in the root `gradle.properties`. Jar names are already `ChatNotes-<Loader>-mc<minecraft_version>-v<mod_version>.jar`; the workflow only collects them.
 3. Rewrite `docs/ARCHITECTURE.md` for the new module graph, and add `docs/PORTING.md` as the playbook: how to add a version (copy the newest module, bump four properties, compile, fix hooks) and how to add a loader.
 4. Update `README.md`: supported versions, the per-version toolchain list, and the new `./gradlew :versions:fabric-26.3:runClient` commands.
+
+What landed:
+
+- `build.yml` has a `core` job that runs `:core:test`, and one build job per module. 1.21.11 installs JDKs 21 and 25. Each 26.x job installs JDK 25 only. Every job still runs the daemon on 25, because configuring the 26.x modules applies Loom 1.19. Artifacts upload as one file set per module, sources jars excluded.
+- `release.yml` still builds with `buildAll` and one `mod_version` bump. It now fails the job if any of the four `ChatNotes-Fabric-mc<game>-v<mod>.jar` files is missing, and still attaches any extra module jar the glob finds.
+- `docs/ARCHITECTURE.md` describes the module graph and the screen-opening hooks. `docs/PORTING.md` is the playbook for a new version and a new loader. `README.md` lists the four supported targets.
 
 ### Phase 6 — Loader-readiness audit
 

@@ -8,13 +8,13 @@
   <strong>Personal chat snippet library for Fabric</strong> — save <code>&</code>-coloured messages, copy them, or drop them into chat without auto-sending.
 </p>
 
-A client-only Fabric mod for Minecraft **1.21.11**. It keeps a personal library of chat snippets (typically messages with `&`-style color codes generated elsewhere) so you can **Copy** one to the system clipboard or **Use** it, which opens the chat box with the text already filled in, ready for you to review and send.
+A client-only Fabric mod for Minecraft **1.21.11**, **26.1** (including 26.1.1 and 26.1.2), **26.2**, and **26.3**. It keeps a personal library of chat snippets (typically messages with `&`-style color codes generated elsewhere) so you can **Copy** one to the system clipboard or **Use** it, which opens the chat box with the text already filled in, ready for you to review and send.
 
 The mod never needs to be installed on a server, sends nothing over the network by itself, and never modifies the text you stored.
 
 ## Status
 
-Phase 5 groups in progress: single-level folders with filter, create/rename/delete, and per-note group assignment. See [plans/](plans) for the full roadmap.
+Supported Fabric targets are listed above. How the modules split, and how to add a version, is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/PORTING.md](docs/PORTING.md).
 
 ## Screenshots
 
@@ -106,6 +106,7 @@ versions/fabric-26.2/        # subproject; thin screens call minecraft.gui.setSc
 versions/fabric-26.3/        # subproject; thin screens call minecraft.gui.setScreen
                              # each module has its own build.gradle, fabric.mod.json, lang, and icon
 docs/ARCHITECTURE.md
+docs/PORTING.md              # how to add a version or a loader
 ```
 
 No mixins. The mod is built entirely on public Minecraft and Fabric API surfaces.
