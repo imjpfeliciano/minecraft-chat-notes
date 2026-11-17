@@ -44,15 +44,21 @@ When the version is meant to ship, add its jar to the expected-file list in `.gi
 
 ## Add a loader
 
-A loader module supplies the four things Fabric supplies today:
+No NeoForge or Forge module exists yet. `shared/mc26` is ready for one: `CoreBoundaryTest` fails if that tree, or `shared/mc121`, contains `net.fabricmc` or `net.neoforged` anywhere in a source file. A loader module recompiles `core/` and `shared/mc26/` as extra source directories. It does not depend on the core jar, and it does not compile `shared/fabric26`.
 
-- the mod entrypoint
-- keybind registration
-- the config directory (`config/chatnotes/notes.json`)
-- a client tick hook that opens the notes screen while a player exists
+`versions/neoforge-26.3` would supply only the loader-specific pieces. Everything else is already shared.
 
-It recompiles `core/` and `shared/mc26/` (or `shared/mc121/` for a 1.21 loader) as extra source directories. It does not depend on the core jar, and it does not compile `shared/fabric26` or `shared/fabric121`. Those packages are Fabric.
+| Fabric class today | What NeoForge 26.3 supplies instead | Shared type it sits on |
+|---|---|---|
+| `ChatNotesClient` | The NeoForge client entrypoint. It opens the store, seeds the demo note when the file is empty, and registers the keybind. `FabricChatNotes.start` is not reusable. | `NoteStore.open` |
+| `FabricConfigPaths` | The NeoForge config directory, still resolving `chatnotes/notes.json` under it. | `ConfigPaths` |
+| `Slf4jModLog` | The NeoForge logger, with the same `{}` placeholders. | `ModLog` |
+| `KeyBindings` | Key registration and an in-world client tick. The default stays **K** under Miscellaneous. The tick still ignores the title screen, where `player` is null. | none; this stays in the loader module |
+| `ChatNotesClient`'s screen lambda | `minecraft.gui.setScreen`, the same call Fabric 26.3 uses. | `ScreenDisplay` is the Fabric name for this hook; the NeoForge entrypoint calls the vanilla method directly |
+| `fabric.mod.json`, lang, icon | `neoforge.mods.toml` plus a copy of the lang files and icon. The mod id stays `chatnotes`. | none |
 
-`shared/mc26` must stay free of `import net.fabricmc`. `CoreBoundaryTest` enforces that for `core/`, `shared/mc121`, and `shared/mc26`. A loader-specific call goes in the version module, behind one of the hooks above, rather than into the abstract screens.
+`MinecraftClipboard` already implements `ClipboardAccess` over `Minecraft.keyboardHandler`, so the NeoForge module uses that class as it stands.
 
-No NeoForge or Forge module exists yet. The first one would be `versions/neoforge-26.3`, with its own mod metadata, entrypoint, and the same thin screens the Fabric 26.3 module has, pointed at whatever that loader uses to show a screen.
+The abstract screens in `shared/mc26` are reused unchanged. The five concrete screens are a copy of `versions/fabric-26.3`, with one edit: `NotesScreen`, `NoteEditScreen`, and `GroupsScreen` currently obtain `UiPlatform` from `FabricChatNotes.platform()`. The NeoForge copies call whatever holds that platform for NeoForge. `openScreen` stays `minecraft.gui.setScreen`, and `chatScreenWith` stays `new ChatScreen(text, false)`.
+
+That is the whole module. Do not add it until a NeoForge toolchain for 26.3 is chosen.

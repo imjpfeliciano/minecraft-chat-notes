@@ -238,10 +238,16 @@ What landed:
 - `release.yml` still builds with `buildAll` and one `mod_version` bump. It now fails the job if any of the four `ChatNotes-Fabric-mc<game>-v<mod>.jar` files is missing, and still attaches any extra module jar the glob finds.
 - `docs/ARCHITECTURE.md` describes the module graph and the screen-opening hooks. `docs/PORTING.md` is the playbook for a new version and a new loader. `README.md` lists the four supported targets.
 
-### Phase 6 — Loader-readiness audit
+### Phase 6 — Loader-readiness audit — **done**
 
 1. Assert mechanically that `shared/mc26` contains no `net.fabricmc` import; this is the property that makes a NeoForge module cheap.
 2. Write down what a `versions/neoforge-26.3` module would supply: the mod entrypoint, keybind registration, a config directory, and a tick hook, all behind the existing `core/platform` SPIs. No code yet.
+
+What landed:
+
+- `CoreBoundaryTest` now fails if `shared/mc26` or `shared/mc121` contains `net.fabricmc` or `net.neoforged` anywhere in a source file, not only on an import line. `:core:test` is the check.
+- `docs/PORTING.md` lists what `versions/neoforge-26.3` would replace: the entrypoint, `ConfigPaths`, `ModLog`, key registration, the client tick, mod metadata, and the lang files. `MinecraftClipboard` and `shared/mc26` stay. No NeoForge sources were added.
+- One coupling is not behind an SPI yet. `NotesScreen`, `NoteEditScreen`, and `GroupsScreen` get `UiPlatform` from `FabricChatNotes.platform()`, so those three constructors are copied and re-pointed rather than compiled as they are.
 
 ## Manual QA matrix (run per version, there is no automated UI test)
 
