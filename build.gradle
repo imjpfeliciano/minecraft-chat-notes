@@ -5,6 +5,8 @@ tasks.register('buildAll') {
 	description = 'Builds :core and every version module.'
 
 	dependsOn ':core:build'
+	dependsOn ':versions:fabric-26.1:build'
+	dependsOn ':versions:fabric-26.2:build'
 	dependsOn ':versions:fabric-26.3:build'
 	dependsOn gradle.includedBuild('fabric-1.21.11').task(':build')
 }

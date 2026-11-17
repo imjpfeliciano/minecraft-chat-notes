@@ -17,6 +17,8 @@ plugins {
 rootProject.name = 'chat-notes'
 
 include ':core'
+include 'versions:fabric-26.1'
+include 'versions:fabric-26.2'
 include 'versions:fabric-26.3'
 
 // 1.21.11 needs fabric-loom-remap 1.14, which cannot share a buildscript classpath with the
