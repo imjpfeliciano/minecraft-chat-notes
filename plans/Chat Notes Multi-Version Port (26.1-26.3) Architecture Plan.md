@@ -170,7 +170,7 @@ Two things worth carrying forward:
 
 CI had to move with the skeleton rather than wait for Phase 5, since `./gradlew build` at the root now builds only `:core`. `build.yml` and `release.yml` call `buildAll`, and the release workflow globs `versions/*/build/libs` into a `release-artifacts/` directory so new modules are attached without editing the workflow again.
 
-### Phase 2 — Extract the core and refactor 1.21.11 onto it
+### Phase 2 — Extract the core and refactor 1.21.11 onto it — **DONE**
 
 This is the phase that proves the abstraction before any port exists. Target: no Minecraft import outside `shared/` and `versions/`.
 
@@ -181,7 +181,14 @@ This is the phase that proves the abstraction before any port exists. Target: no
 5. Create `shared/mc121` with `GuiGraphicsPainter` and the abstract screens, and `shared/fabric121` with the `ClientModInitializer` bootstrap plus `KeyBindingHelper` registration. `versions/fabric-1.21.11` keeps only concrete subclasses, `fabric.mod.json`, and build config.
 6. Add core tests for the new logic: hex and legacy-hex parsing, `§` detection, span styling, filter sentinel round-trips, reorder gating, soft-limit colouring. Add a guard test or Gradle check that fails if any file under `core/` contains `import net.minecraft` or `import net.fabricmc`.
 
-Gate: `./gradlew :core:test` green, `./gradlew buildAll` green, and the **full manual QA matrix below passes on 1.21.11** with an existing `notes.json` loaded unchanged.
+What landed:
+
+- `data/` moved to `com.imjpfeliciano.chatnotes.core.data` with its 21 existing tests. `AmpersandParser` returns `List<TextSpan>` and no longer mentions `ChatFormatting`; colour codes reset the style and decoration codes stack, matching `applyLegacyFormat` / `applyFormat`.
+- Screens in `shared/mc121` are abstract and draw through `Painter` / `NotesPainting` / `GroupsPainting`. The 1.21.11 module keeps a thin subclass per screen. Each implements `openScreen` as `minecraft.setScreen` and, for the notes screen, `chatScreenWith` as `new ChatScreen(text, false)` — the same two hooks Phase 3 will override.
+- `shared/fabric121` owns startup, `KeyBindingHelper`, `FabricLoader.getConfigDir()` (behind `ConfigPaths`) and the clipboard. The version module's `ChatNotesClient` only chooses which screen to open.
+- A boundary test fails the build if `core/` imports Minecraft or Fabric, or if `shared/mc121` imports Fabric.
+
+Gate: **build passed; the client boots and loads the existing file; the click-through matrix was not re-run.** `./gradlew :core:test` is green (42 tests, including the moved store tests) and `./gradlew buildAll` produces `chatnotes-0.1.1+1.21.11.jar`. `:fabric-1.21.11:runClient` reaches `[Chat Notes] Client init complete (2 notes)` against the `notes.json` already in `run/config/chatnotes/`, so the moved store reads a file written before the extraction and the path is unchanged. The click-through matrix below (keybind, list, editor, groups, copy, use) still has to be confirmed in that client before this is called behaviour-preserving.
 
 ### Phase 3 — The 26.3 Fabric port
 
@@ -207,7 +214,7 @@ Gate: all three modules build, each `runClient` launches on its own version, and
 ### Phase 5 — CI, release, docs
 
 1. `.github/workflows/build.yml`: matrix over `[fabric-1.21.11, fabric-26.1, fabric-26.2, fabric-26.3]` with `java-version: [21, 25]` paired per module, plus a `:core:test` job that needs no Minecraft.
-2. `.github/workflows/release.yml`: build every module, attach one jar per version, keep the single `mod_version` bump in the root `gradle.properties`.
+2. `.github/workflows/release.yml`: build every module, attach one jar per version, keep the single `mod_version` bump in the root `gradle.properties`. Jar names are already `ChatNotes-<Loader>-mc<minecraft_version>-v<mod_version>.jar`; the workflow only collects them.
 3. Rewrite `docs/ARCHITECTURE.md` for the new module graph, and add `docs/PORTING.md` as the playbook: how to add a version (copy the newest module, bump four properties, compile, fix hooks) and how to add a loader.
 4. Update `README.md`: supported versions, the per-version toolchain list, and the new `./gradlew :versions:fabric-26.3:runClient` commands.
 

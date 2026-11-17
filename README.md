@@ -80,7 +80,7 @@ These are the exact versions the project is built against. Check [fabricmc.net/d
 ./gradlew :fabric-1.21.11:runClient       # launches a dev client with the mod loaded
 ```
 
-Jars land in `versions/<module>/build/libs/`, named `chatnotes-<version>+<minecraft_version>.jar`.
+Jars land in `versions/<module>/build/libs/`, named `ChatNotes-<Loader>-mc<minecraft_version>-v<mod_version>.jar` (for example `ChatNotes-Fabric-mc1.21.11-v0.1.1.jar`). A release uses the version entered in the workflow.
 The dev client writes its game files to `versions/<module>/run/`, which is git-ignored.
 
 ## Layout
@@ -90,15 +90,13 @@ chat-notes-logo.png          # project / store logo
 media/
 ├── STORE_DESCRIPTION.md     # Modrinth / CurseForge copy
 └── screenshots/             # gallery PNGs (see SCREENSHOTS.md)
-core/                        # version-independent logic, unit tested without Minecraft
+core/                        # data, text, rules, painting. No Minecraft imports.
+shared/
+├── mc121/                   # abstract screens + GuiGraphics painter (1.21 API)
+└── fabric121/               # Fabric bootstrap, keybind, config dir, clipboard
 versions/fabric-1.21.11/
-├── build.gradle             # Loom config + per-version toolchain
-├── src/main/java/com/imjpfeliciano/chatnotes/
-│   ├── ChatNotesClient.java
-│   ├── data/
-│   ├── input/
-│   ├── ui/
-│   └── util/
+├── build.gradle             # Loom config; compiles core + shared as extra source dirs
+├── src/main/java/.../       # thin screen subclasses + the mod entrypoint
 └── src/main/resources/
     ├── fabric.mod.json
     └── assets/chatnotes/    # icon.png + lang (en_us, es_mx, es_es)
