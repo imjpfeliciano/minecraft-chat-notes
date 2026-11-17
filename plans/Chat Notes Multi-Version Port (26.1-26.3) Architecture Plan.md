@@ -11,8 +11,8 @@ Facts verified against `piston-meta.mojang.com`, `meta.fabricmc.net`, the Modrin
 **26.x is a platform change, not a version bump:**
 
 - Minecraft 26.1, 26.2, 26.3 (and 26.1.1 / 26.1.2) are **unobfuscated**. The version manifest has no `client_mappings` entry and Fabric publishes intermediary `0.0.0` as a placeholder. `mappings loom.officialMojangMappings()` must be **removed**.
-- The Loom plugin changes from `net.fabricmc.fabric-loom-remap` to **`net.fabricmc.fabric-loom`** (`1.19-SNAPSHOT`), and dependencies are declared with `implementation`, not `modImplementation`.
-- **Java 25** is required (`javaVersion.majorVersion = 25`, `java-runtime-epsilon`), with `options.release = 25` and Gradle **9.8.2**.
+- The Loom plugin changes from `net.fabricmc.fabric-loom-remap` to **`net.fabricmc.fabric-loom`** (`1.19.4`, a stable release — see Phase 0), and dependencies are declared with `implementation`, not `modImplementation`.
+- **Java 25** is required (`javaVersion.majorVersion = 25`, `java-runtime-epsilon`), with `options.release = 25` and Gradle **9.8.2**. Loom 1.19 also requires the Gradle **daemon** to run on Java 25, not just the compile toolchain.
 - `net.minecraft.client.gui.GuiGraphics` **no longer exists**. Screens override `extractRenderState(GuiGraphicsExtractor, int, int, float)`; list rows override `extractContent(GuiGraphicsExtractor, int, int, boolean, float)`. Drawing calls are renamed: `drawString` to `text`, `drawCenteredString` to `centeredText`, `renderOutline` to `outline`, `renderBackground` to `extractBackground`. `fill` keeps its shape. Every one of the five screens is affected.
 - Fabric API renamed the keybind helper: `net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper.registerKeyBinding` becomes `net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper.registerKeyMapping`. `ClientTickEvents` and `FabricLoader.getConfigDir()` are unchanged.
 
@@ -25,9 +25,9 @@ Unchanged across 26.1 to 26.3 and therefore safe in shared code: `ObjectSelectio
 
 **Verified per-version toolchain values:**
 
-- 26.3: loader `0.20.1`, Fabric API `0.166.2+26.3`, Loom `1.19-SNAPSHOT`, Java 25
-- 26.2: loader `0.20.1`, Fabric API `0.161.0+26.2`, Loom `1.19-SNAPSHOT`, Java 25
-- 26.1: loader `0.20.1`, Fabric API `0.155.3+26.1.2` (covers 26.1, 26.1.1, 26.1.2), Loom `1.19-SNAPSHOT`, Java 25
+- 26.3: loader `0.20.1`, Fabric API `0.166.2+26.3`, Loom `1.19.4`, Java 25
+- 26.2: loader `0.20.1`, Fabric API `0.161.0+26.2`, Loom `1.19.4`, Java 25
+- 26.1: loader `0.20.1`, Fabric API `0.155.3+26.1.2` (covers 26.1, 26.1.1, 26.1.2), Loom `1.19.4`, Java 25
 - 1.21.11 (existing): loader `0.18.2`, Fabric API `0.139.4+1.21.11` (latest is `0.141.6+1.21.11`), Loom `1.14-SNAPSHOT` with `fabric-loom-remap`, Java 21
 
 ## Target structure
@@ -125,16 +125,33 @@ The `ChatFormatting.isColor()` deletion is solved in core rather than per versio
 
 Each phase ends at a green, shippable state. Do not start a phase before the previous gate passes.
 
-### Phase 0 — Environment and toolchain verification
+### Phase 0 — Environment and toolchain verification — **DONE**
 
-No code. Confirm the ground truth, because the current machine has **no JDK installed at all** (`java`, `javap`, `~/.gradle/jdks`, `/opt` are all empty), and Gradle's toolchain auto-download needs a resolver plugin that this repo does not have.
+No code. Confirm the ground truth before touching Chat Notes.
 
-1. Install or locate **JDK 25** and **JDK 21**; record `JAVA_HOME`.
-2. Add `id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'` to the root `settings.gradle` `plugins` block, or confirm both JDKs are discoverable, otherwise `toolchain { languageVersion = 25 }` fails.
-3. Bump `gradle/wrapper/gradle-wrapper.properties` to `gradle-9.8.2-bin.zip` and re-run `./gradlew --version`.
-4. In a scratch directory, generate or copy `FabricMC/fabric-example-mod` at 26.3 and run `./gradlew build` once to prove the `fabric-loom` 1.19 toolchain works on this machine before touching Chat Notes.
+What shipped:
 
-Gate: `./gradlew build` succeeds on the unmodified current repo with JDK 21, and the 26.3 example mod builds with JDK 25.
+1. **JDKs.** The machine already had JDK 21 (`openjdk@21`, 21.0.10) — the earlier "no JDK at all" reading was wrong. Installed `openjdk@25` (25.0.5) via Homebrew at `/opt/homebrew/opt/openjdk@25/libexec/openjdk.jdk/Contents/Home`.
+2. **Toolchain resolver.** Added `org.gradle.toolchains.foojay-resolver-convention` 1.0.0 to the root `settings.gradle`. It must sit in a `plugins` block *after* `pluginManagement`, which has to stay first in the file.
+3. **Gradle 9.8.2.** Wrapper bumped from 9.2.1 via `./gradlew wrapper --gradle-version 9.8.2`, with `distributionSha256Sum` pinned. This matches the 26.3 example mod exactly; 9.9.1 is the current release but there is no reason to run ahead of upstream.
+4. **Daemon JVM pinned.** Added `gradle/gradle-daemon-jvm.properties` (`toolchainVersion=25`) via `./gradlew updateDaemonJvm --jvm-version=25`. `./gradlew` now works with no `JAVA_HOME` set and provisions its own JDK 25 on a fresh machine, including CI.
+5. **26.3 example mod built.** `FabricMC/fabric-example-mod` (default branch is now `26.3`) cloned into a gitignored `.scratch/` and built green.
+
+Findings that change the later phases:
+
+- **Loom 1.19 requires the Gradle *daemon* to be Java 25.** A `java { toolchain { languageVersion = 25 } }` block is not enough — plugin resolution itself fails with *"Dependency requires at least JVM runtime version 25"* before any compilation. This is why the daemon JVM is pinned rather than left to `JAVA_HOME`.
+- **Loom 1.14.10 (1.21.11) runs fine on a Java 25 daemon** with its own toolchain at 21. One wrapper, one daemon JVM at 25, serves the whole monorepo, so the Phase 1 `includeBuild` layout holds.
+- **Loom has stable 1.19.x releases now** (1.19.1 through 1.19.4). Built and verified against **1.19.4**, so `1.19-SNAPSHOT` is not needed anywhere and the moving-target risk below is closed.
+- The example mod confirms every 26.3 assumption verbatim: `net.fabricmc.fabric-loom`, no `mappings` line, `implementation` over `modImplementation`, `options.release = 25`, loader `0.20.1`, Fabric API `0.166.2+26.3`. The `loom { mods { ... } }` block still exists in the non-remap plugin, answering the open question in Phase 3 step 1. There is no `remapJar` task.
+- The unobfuscated jar lands **project-local** at `<module>/.gradle/loom-cache/minecraftMaven/net/minecraft/minecraft-clientOnly-<hash>/26.3/`, not under `~/.gradle/caches`. Pass both the `clientOnly` and `common` jars on the `javap` classpath.
+
+Signature questions resolved by `javap` against that jar, so Phase 3 does not have to guess:
+
+- `GuiGraphicsExtractor.outline(int, int, int, int, int)` is **`(x, y, width, height, argb)`** — its bytecode fills `(x, y, x + arg3, y + 1, ...)`. Same shape as the old `renderOutline`, not `fill`'s corner pairs.
+- `text(Font, String, int, int, int)` has a `boolean` shadow overload, matching `drawString`. `centeredText` has **no** boolean overload.
+- `net.minecraft.client.gui.GuiGraphics` is genuinely absent; `ChatFormatting` retains only `PREFIX_CODE`, `stripFormatting` and `getByCode`; `Minecraft.setScreen` is gone while `Minecraft.gui` is a public final field exposing `setScreen(Screen)`. (`Minecraft.setScreenAndShow(Screen)` also exists, if the `openScreen` hook ever needs it.)
+
+Gate: **passed.** `./gradlew build` is green on the unmodified repo with no `JAVA_HOME` set, and the 26.3 example mod builds with Loom 1.19.4 on JDK 25.
 
 ### Phase 1 — Monorepo skeleton, no behaviour change
 
@@ -161,14 +178,14 @@ Gate: `./gradlew :core:test` green, `./gradlew buildAll` green, and the **full m
 
 ### Phase 3 — The 26.3 Fabric port
 
-1. Create `versions/fabric-26.3/` with `plugins { id 'net.fabricmc.fabric-loom' version '1.19-SNAPSHOT' }`, no `mappings` line, `implementation` (not `modImplementation`) for loader and API, `options.release = 25`, toolchain 25, and the `loom { mods { "chatnotes" { sourceSet sourceSets.main } } }` block (confirm it still exists in the non-remap plugin).
+1. Create `versions/fabric-26.3/` with `plugins { id 'net.fabricmc.fabric-loom' version '1.19.4' }`, no `mappings` line, `implementation` (not `modImplementation`) for loader and API, `options.release = 25`, toolchain 25, and the `loom { mods { "chatnotes" { sourceSet sourceSets.main } } }` block (confirmed to still exist in the non-remap plugin).
 2. `fabric.mod.json`: `"minecraft": "~26.3"`, `"java": ">=25"`, `"fabricloader": ">=0.20.1"`, `"environment": "client"`, same id, icon and entrypoint shape as today.
 3. Create `shared/mc26`: `ExtractorPainter` over `GuiGraphicsExtractor` (`text`, `centeredText`, `fill`, `outline`), plus abstract `AbstractNotesScreen`, `AbstractNoteEditScreen`, `AbstractGroupsScreen`, `AbstractGroupEditScreen`, `AbstractGroupDeleteScreen`. Conversions to apply: `render` to `extractRenderState`, `renderBackground` to `extractBackground`, `Entry.renderContent` to `Entry.extractContent`, and `super.render(...)` to `super.extractRenderState(...)`.
 4. Create `shared/fabric26`: client entrypoint, `KeyMappingHelper.registerKeyMapping` with `KeyMapping.Category.MISC`, the `ClientTickEvents.END_CLIENT_TICK` plus `consumeClick()` loop, `FabricLoader.getInstance().getConfigDir()` for `ConfigPaths`, and `Minecraft.getInstance().keyboardHandler` for `ClipboardAccess`.
 5. Add the ~5 concrete classes in `versions/fabric-26.3/` that implement `openScreen(Screen)` as `minecraft.gui.setScreen(s)` and `chatScreenWith(text)` as `new ChatScreen(text, false)`.
 6. Register the module in the root `settings.gradle` and in `buildAll`.
 
-Verify as you go, cheaply: the 26.x jars are unobfuscated, so `javap -cp ~/.gradle/caches/.../client.jar net.minecraft.client.gui.GuiGraphicsExtractor` answers any signature question directly, with no mappings step. Treat `./gradlew :versions:fabric-26.3:compileJava` as the real check. Two semantics to confirm rather than assume: `outline(x, y, w, h, argb)` matches the old `renderOutline` argument order (not `fill`'s corner pairs), and `extractor.text(...)` has the same shadow behaviour as `drawString` (there are `boolean` overloads).
+Verify as you go, cheaply: the 26.x jars are unobfuscated, so `javap -cp <module>/.gradle/loom-cache/minecraftMaven/net/minecraft/minecraft-clientOnly-<hash>/26.3/*.jar net.minecraft.client.gui.GuiGraphicsExtractor` answers any signature question directly, with no mappings step. Treat `./gradlew :versions:fabric-26.3:compileJava` as the real check. Both of the semantics this phase used to guess at were settled in Phase 0: `outline` is `(x, y, width, height, argb)` and `text` carries a `boolean` shadow overload while `centeredText` does not.
 
 Gate: `:versions:fabric-26.3:build` green, `:versions:fabric-26.3:runClient` launches, and the full manual QA matrix passes on 26.3.
 
@@ -210,6 +227,6 @@ Data: start from a `notes.json` written by the current 1.21.11 build and confirm
 
 ## Risks
 
-- `loom_version=1.19-SNAPSHOT` is a moving target, as `1.14-SNAPSHOT` is today. Pin to a release as soon as one is published, and expect CI to need `maven.fabricmc.net` reachable on every build.
+- ~~`loom_version=1.19-SNAPSHOT` is a moving target.~~ Closed in Phase 0: Loom 1.19.4 is a published release and is what the 26.x modules pin. CI still needs `maven.fabricmc.net` reachable on every build, and `foojay-resolver` needs `api.foojay.io` to provision the daemon JDK 25.
 - 26.4 snapshots already exist, and 26.3 moved `RenderPipeline` into `com.mojang.renderpearl`. Chat Notes does not touch that package, but the next port should re-run the signature diff before assuming `shared/mc26` still covers it.
 - Phase 2 is the only phase that can regress a shipped version. Keep it a separate PR from Phase 3 so a 1.21.11 regression is bisectable.
