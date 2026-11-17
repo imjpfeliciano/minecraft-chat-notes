@@ -8,13 +8,13 @@
   <strong>Personal chat snippet library for Fabric</strong> — save <code>&</code>-coloured messages, copy them, or drop them into chat without auto-sending.
 </p>
 
-A client-only Fabric mod for Minecraft **1.21.11**. It keeps a personal library of chat snippets (typically messages with `&`-style color codes generated elsewhere) so you can **Copy** one to the system clipboard or **Use** it, which opens the chat box with the text already filled in, ready for you to review and send.
+A client-only Fabric mod for Minecraft **1.21.11**, **26.1** (including 26.1.1 and 26.1.2), **26.2**, and **26.3**. It keeps a personal library of chat snippets (typically messages with `&`-style color codes generated elsewhere) so you can **Copy** one to the system clipboard or **Use** it, which opens the chat box with the text already filled in, ready for you to review and send.
 
 The mod never needs to be installed on a server, sends nothing over the network by itself, and never modifies the text you stored.
 
 ## Status
 
-Phase 5 groups in progress: single-level folders with filter, create/rename/delete, and per-note group assignment. See [plans/](plans) for the full roadmap.
+Supported Fabric targets are listed above. How the modules split, and how to add a version, is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/PORTING.md](docs/PORTING.md).
 
 ## Screenshots
 
@@ -63,23 +63,29 @@ Ready-to-paste Modrinth / CurseForge / GitHub blurb (EN + ES): [media/STORE_DESC
 
 These are the exact versions the project is built against. Check [fabricmc.net/develop](https://fabricmc.net/develop) before bumping any of them.
 
-- Minecraft `1.21.11`
-- Fabric Loader `0.18.2`
-- Fabric API `0.139.4+1.21.11`
-- Fabric Loom `1.14-SNAPSHOT`
-- Gradle `9.2.1` (via the wrapper)
-- Java `21` (Gradle toolchain; the build does not depend on your default `java`)
-- Mappings: **official Mojang mappings** (`loom.officialMojangMappings()`), not Yarn
+- Minecraft `1.21.11` — Fabric Loader `0.18.2`, Fabric API `0.139.4+1.21.11`, Loom `1.14-SNAPSHOT`, Java `21`, official Mojang mappings
+- Minecraft `26.1` — Fabric Loader `0.20.1`, Fabric API `0.155.3+26.1.2`, Loom `1.19.4`, Java `25`, unobfuscated (no mappings line)
+- Minecraft `26.2` — Fabric Loader `0.20.1`, Fabric API `0.161.0+26.2`, Loom `1.19.4`, Java `25`, unobfuscated (no mappings line)
+- Minecraft `26.3` — Fabric Loader `0.20.1`, Fabric API `0.166.2+26.3`, Loom `1.19.4`, Java `25`, unobfuscated (no mappings line)
+- Gradle `9.8.2` (via the wrapper, which provisions its own JDK 25 for the daemon)
 
 ## Building and running
 
 ```bash
-./gradlew build      # produces build/libs/chatnotes-<version>.jar
-./gradlew runClient  # launches a dev client with the mod loaded
-./gradlew test       # runs the unit tests for the storage layer
+./gradlew buildAll                        # builds :core and every version module
+./gradlew :core:test                      # version-independent unit tests, no Minecraft needed
+./gradlew :fabric-1.21.11:build           # the 1.21.11 module
+./gradlew :versions:fabric-26.1:build     # the 26.1 module
+./gradlew :versions:fabric-26.2:build     # the 26.2 module
+./gradlew :versions:fabric-26.3:build     # the 26.3 module
+./gradlew :fabric-1.21.11:runClient       # launches a 1.21.11 dev client
+./gradlew :versions:fabric-26.1:runClient # launches a 26.1 dev client
+./gradlew :versions:fabric-26.2:runClient # launches a 26.2 dev client
+./gradlew :versions:fabric-26.3:runClient # launches a 26.3 dev client
 ```
 
-The dev client writes its game files to `run/`, which is git-ignored.
+Jars land in `versions/<module>/build/libs/`, named `ChatNotes-<Loader>-mc<minecraft_version>-v<mod_version>.jar` (for example `ChatNotes-Fabric-mc1.21.11-v0.1.1.jar`). A release uses the version entered in the workflow.
+The dev client writes its game files to `versions/<module>/run/`, which is git-ignored.
 
 ## Layout
 
@@ -88,16 +94,19 @@ chat-notes-logo.png          # project / store logo
 media/
 ├── STORE_DESCRIPTION.md     # Modrinth / CurseForge copy
 └── screenshots/             # gallery PNGs (see SCREENSHOTS.md)
-src/main/java/com/imjpfeliciano/chatnotes/
-├── ChatNotesClient.java
-├── data/
-├── input/
-├── ui/
-└── util/
+core/                        # data, text, rules, painting. No Minecraft imports.
+shared/
+├── mc121/                   # abstract screens + GuiGraphics painter (1.21 API)
+├── fabric121/               # Fabric bootstrap for 1.21 (KeyBindingHelper)
+├── mc26/                    # abstract screens + GuiGraphicsExtractor painter
+└── fabric26/                # Fabric bootstrap for 26.x (KeyMappingHelper)
+versions/fabric-1.21.11/     # included build; thin screens call minecraft.setScreen
+versions/fabric-26.1/        # subproject; thin screens call minecraft.setScreen
+versions/fabric-26.2/        # subproject; thin screens call minecraft.gui.setScreen
+versions/fabric-26.3/        # subproject; thin screens call minecraft.gui.setScreen
+                             # each module has its own build.gradle, fabric.mod.json, lang, and icon
 docs/ARCHITECTURE.md
-src/main/resources/
-├── fabric.mod.json
-└── assets/chatnotes/        # icon.png + lang (en_us, es_mx, es_es)
+docs/PORTING.md              # how to add a version or a loader
 ```
 
 No mixins. The mod is built entirely on public Minecraft and Fabric API surfaces.

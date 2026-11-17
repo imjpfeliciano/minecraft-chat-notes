@@ -1,6 +1,6 @@
 # Manually publish a GitHub Release from the Actions tab.
 # Actions → release → Run workflow → enter version (e.g. 0.1.1).
-# This bumps mod_version, pushes a v* tag, builds the remapped JAR, and attaches it to the release.
+# This bumps mod_version, pushes a v* tag, builds one jar per version module, and attaches them to the release.
 
 name: release
 on:
@@ -75,26 +75,59 @@ jobs:
       - name: setup jdk
         uses: actions/setup-java@v4
         with:
-          java-version: '21'
-          distribution: 'microsoft'
+          # 25 runs the Gradle daemon, which Loom 1.19 requires; 21 is the compile
+          # toolchain for the 1.21.11 module. Installing both avoids a foojay download.
+          java-version: |
+            21
+            25
+          distribution: 'temurin'
 
       - name: make gradle wrapper executable
         run: chmod +x ./gradlew
 
       - name: build
-        run: ./gradlew build -Pmod_version=${{ steps.version.outputs.version }}
+        run: ./gradlew buildAll -Pmod_version=${{ steps.version.outputs.version }}
 
-      - name: select remapped jar
-        id: jar
+      - name: collect mod jars
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          jar=$(find build/libs -maxdepth 1 -type f -name 'chatnotes-*.jar' ! -name '*-sources.jar' | head -n 1)
-          if [ -z "$jar" ]; then
-            echo "No remapped chatnotes JAR found in build/libs" >&2
-            ls -la build/libs || true
+          mkdir -p release-artifacts
+          # One jar per version module. Globbing versions/* means a new module is attached
+          # without editing the copy loop. The list below only checks that the modules
+          # this release knows about actually produced a jar.
+          count=0
+          while IFS= read -r -d '' jar; do
+            base=$(basename "$jar")
+            case "$base" in
+              *-sources.jar|*-dev.jar) continue ;;
+            esac
+            cp "$jar" "release-artifacts/$base"
+            count=$((count + 1))
+            echo "Selected $base"
+          done < <(find versions/*/build/libs -maxdepth 1 -type f -name '*.jar' -print0)
+          if [ "$count" -eq 0 ]; then
+            echo "No mod JAR found under versions/*/build/libs" >&2
+            ls -la versions/*/build/libs || true
             exit 1
           fi
-          echo "path=$jar" >> "$GITHUB_OUTPUT"
-          echo "Selected $jar"
+          missing=0
+          for expected in \
+            "ChatNotes-Fabric-mc1.21.11-v${VERSION}.jar" \
+            "ChatNotes-Fabric-mc26.1-v${VERSION}.jar" \
+            "ChatNotes-Fabric-mc26.2-v${VERSION}.jar" \
+            "ChatNotes-Fabric-mc26.3-v${VERSION}.jar"
+          do
+            if [ ! -f "release-artifacts/$expected" ]; then
+              echo "Missing $expected" >&2
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            ls -la release-artifacts versions/*/build/libs || true
+            exit 1
+          fi
+          ls -la release-artifacts
 
       - name: create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -103,4 +136,4 @@ jobs:
           name: Chat Notes ${{ steps.version.outputs.version }}
           generate_release_notes: true
           prerelease: ${{ inputs.prerelease }}
-          files: ${{ steps.jar.outputs.path }}
+          files: release-artifacts/*.jar

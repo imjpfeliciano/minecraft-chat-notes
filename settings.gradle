@@ -8,3 +8,19 @@ pluginManagement {
 		gradlePluginPortal()
 	}
 }
+
+plugins {
+	// Lets Gradle download the JDKs the toolchain blocks ask for (21 here, 25 for the 26.x modules).
+	id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
+}
+
+rootProject.name = 'chat-notes'
+
+include ':core'
+include 'versions:fabric-26.1'
+include 'versions:fabric-26.2'
+include 'versions:fabric-26.3'
+
+// 1.21.11 needs fabric-loom-remap 1.14, which cannot share a buildscript classpath with the
+// fabric-loom 1.19 the 26.x modules use. A separate build is the only way to hold both.
+includeBuild 'versions/fabric-1.21.11'

@@ -1,3 +1,11 @@
+# toolchain verification sandbox
+
+.scratch/
+
+# jars staged by the release workflow
+
+release-artifacts/
+
 # gradle
 
 .gradle/

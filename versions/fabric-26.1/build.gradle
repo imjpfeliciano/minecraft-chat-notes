@@ -1,0 +1,76 @@
+plugins {
+	id 'net.fabricmc.fabric-loom' version '1.19.4'
+}
+
+// A subproject does not get its own gradle.properties, so the version-specific keys are read here.
+// mod_version and mod_name come from the root gradle.properties. -Pmod_version still wins.
+def moduleProps = new Properties()
+file('gradle.properties').withInputStream { moduleProps.load(it) }
+def minecraftVersion = moduleProps.getProperty('minecraft_version')
+def loaderVersion = moduleProps.getProperty('loader_version')
+def fabricVersion = moduleProps.getProperty('fabric_version')
+def loaderName = moduleProps.getProperty('loader_name')
+
+// Published name: "ChatNotes-Fabric-mc26.1-v0.1.1.jar".
+version = "v${project.mod_version}"
+group = project.maven_group
+
+base {
+	archivesName = "${project.mod_name.replace(' ', '')}-${loaderName}-mc${minecraftVersion}"
+}
+
+repositories {
+	maven { url = 'https://maven.fabricmc.net/' }
+	mavenCentral()
+}
+
+loom {
+	mods {
+		"chatnotes" {
+			sourceSet sourceSets.main
+		}
+	}
+}
+
+// Compiled again here, against 26.1, rather than consumed as a jar.
+sourceSets.main {
+	java.srcDirs += [
+			"$rootDir/core/src/main/java",
+			"$rootDir/shared/mc26/src/main/java",
+			"$rootDir/shared/fabric26/src/main/java"
+	]
+}
+
+dependencies {
+	minecraft "com.mojang:minecraft:${minecraftVersion}"
+	implementation "net.fabricmc:fabric-loader:${loaderVersion}"
+	implementation "net.fabricmc.fabric-api:fabric-api:${fabricVersion}"
+}
+
+processResources {
+	inputs.property "version", project.mod_version
+
+	filesMatching("fabric.mod.json") {
+		expand "version": project.mod_version
+	}
+}
+
+tasks.withType(JavaCompile).configureEach {
+	it.options.release = 25
+}
+
+java {
+	toolchain {
+		languageVersion = JavaLanguageVersion.of(25)
+	}
+
+	withSourcesJar()
+}
+
+jar {
+	inputs.property "archivesName", project.base.archivesName
+
+	from("$rootDir/LICENSE") {
+		rename { "${it}_${inputs.properties.archivesName}" }
+	}
+}

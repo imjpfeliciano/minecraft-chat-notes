@@ -1,0 +1,77 @@
+plugins {
+	id 'net.fabricmc.fabric-loom-remap' version "${loom_version}"
+}
+
+// This module is its own Gradle build, so rootDir is versions/fabric-1.21.11 rather than the
+// repo root. Everything shared (LICENSE now, core and shared sources from Phase 2) lives here.
+def repoRoot = "$rootDir/../.."
+
+// Published name: "ChatNotes-Fabric-mc1.21.11-v0.1.1.jar".
+// Gradle appends project.version, so the v prefix lives there and mc lives in the base name.
+// fabric.mod.json is expanded from mod_version below, without the prefix.
+// The release workflow passes -Pmod_version. Loader and game version come from this module.
+version = "v${project.mod_version}"
+group = project.maven_group
+
+base {
+	archivesName = "${project.mod_name.replace(' ', '')}-${project.loader_name}-mc${project.minecraft_version}"
+}
+
+repositories {
+	maven { url = 'https://maven.fabricmc.net/' }
+	mavenCentral()
+}
+
+loom {
+	mods {
+		"chatnotes" {
+			sourceSet sourceSets.main
+		}
+	}
+}
+
+// Compiled again here, against this version's Minecraft, rather than consumed as a jar.
+sourceSets.main {
+	java.srcDirs += [
+			"$repoRoot/core/src/main/java",
+			"$repoRoot/shared/mc121/src/main/java",
+			"$repoRoot/shared/fabric121/src/main/java"
+	]
+}
+
+dependencies {
+	// To change the versions see the gradle.properties file
+	minecraft "com.mojang:minecraft:${project.minecraft_version}"
+	mappings loom.officialMojangMappings()
+	modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+}
+
+processResources {
+	inputs.property "version", project.mod_version
+
+	filesMatching("fabric.mod.json") {
+		expand "version": project.mod_version
+	}
+}
+
+tasks.withType(JavaCompile).configureEach {
+	it.options.release = 21
+}
+
+java {
+	// Gradle downloads or locates a JDK 21 itself, so the build works the same here and in CI.
+	toolchain {
+		languageVersion = JavaLanguageVersion.of(21)
+	}
+
+	withSourcesJar()
+}
+
+jar {
+	inputs.property "archivesName", project.base.archivesName
+
+	from("$repoRoot/LICENSE") {
+		rename { "${it}_${inputs.properties.archivesName}" }
+	}
+}

@@ -1,69 +1,12 @@
-plugins {
-	id 'net.fabricmc.fabric-loom-remap' version "${loom_version}"
-}
+// 26.x modules are subprojects. 1.21.11 is an included build, so `./gradlew build` at the
+// root would miss it. buildAll is the entry point that produces one jar per supported version.
+tasks.register('buildAll') {
+	group = 'build'
+	description = 'Builds :core and every version module.'
 
-version = project.mod_version
-group = project.maven_group
-
-base {
-	archivesName = project.archives_base_name
-}
-
-repositories {
-	maven { url = 'https://maven.fabricmc.net/' }
-	mavenCentral()
-}
-
-loom {
-	mods {
-		"chatnotes" {
-			sourceSet sourceSets.main
-		}
-	}
-}
-
-dependencies {
-	// To change the versions see the gradle.properties file
-	minecraft "com.mojang:minecraft:${project.minecraft_version}"
-	mappings loom.officialMojangMappings()
-	modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
-	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
-
-	// The data layer is plain Java, so it can be unit tested without launching Minecraft.
-	testImplementation platform("org.junit:junit-bom:${project.junit_version}")
-	testImplementation "org.junit.jupiter:junit-jupiter"
-	testRuntimeOnly "org.junit.platform:junit-platform-launcher"
-}
-
-processResources {
-	inputs.property "version", project.version
-
-	filesMatching("fabric.mod.json") {
-		expand "version": inputs.properties.version
-	}
-}
-
-tasks.withType(JavaCompile).configureEach {
-	it.options.release = 21
-}
-
-java {
-	// Gradle downloads or locates a JDK 21 itself, so the build works the same here and in CI.
-	toolchain {
-		languageVersion = JavaLanguageVersion.of(21)
-	}
-
-	withSourcesJar()
-}
-
-test {
-	useJUnitPlatform()
-}
-
-jar {
-	inputs.property "archivesName", project.base.archivesName
-
-	from("LICENSE") {
-		rename { "${it}_${inputs.properties.archivesName}" }
-	}
+	dependsOn ':core:build'
+	dependsOn ':versions:fabric-26.1:build'
+	dependsOn ':versions:fabric-26.2:build'
+	dependsOn ':versions:fabric-26.3:build'
+	dependsOn gradle.includedBuild('fabric-1.21.11').task(':build')
 }
