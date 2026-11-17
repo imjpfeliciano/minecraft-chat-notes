@@ -23,6 +23,11 @@ class CoreBoundaryTest {
         assertNoImports(Path.of("../shared/mc121/src/main/java"), "import net.fabricmc");
     }
 
+    @Test
+    void mc26DoesNotImportFabric() throws IOException {
+        assertNoImports(Path.of("../shared/mc26/src/main/java"), "import net.fabricmc");
+    }
+
     private static void assertNoImports(Path root, String... banned) throws IOException {
         assertTrue(Files.isDirectory(root), () -> "missing " + root.toAbsolutePath());
         List<String> offenders = new ArrayList<>();

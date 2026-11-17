@@ -1,9 +1,10 @@
-// Every version module is an included build, so `./gradlew build` at the root would only
-// build :core. buildAll is the entry point that produces one jar per supported version.
+// 26.x modules are subprojects. 1.21.11 is an included build, so `./gradlew build` at the
+// root would miss it. buildAll is the entry point that produces one jar per supported version.
 tasks.register('buildAll') {
 	group = 'build'
 	description = 'Builds :core and every version module.'
 
 	dependsOn ':core:build'
+	dependsOn ':versions:fabric-26.3:build'
 	dependsOn gradle.includedBuild('fabric-1.21.11').task(':build')
 }
