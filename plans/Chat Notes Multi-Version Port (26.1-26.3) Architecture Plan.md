@@ -153,7 +153,7 @@ Signature questions resolved by `javap` against that jar, so Phase 3 does not ha
 
 Gate: **passed.** `./gradlew build` is green on the unmodified repo with no `JAVA_HOME` set, and the 26.3 example mod builds with Loom 1.19.4 on JDK 25.
 
-### Phase 1 — Monorepo skeleton, no behaviour change
+### Phase 1 — Monorepo skeleton, no behaviour change — **DONE**
 
 1. `git mv` the current `src/`, `build.gradle`, `gradle.properties` (version-specific keys only) into `versions/fabric-1.21.11/`, and give it its own `settings.gradle` with the Fabric `pluginManagement` repositories.
 2. Root `settings.gradle`: `rootProject.name = 'chat-notes'`, `include ':core'`, `includeBuild 'versions/fabric-1.21.11'`. Keep one wrapper at the root.
@@ -161,7 +161,14 @@ Gate: **passed.** `./gradlew build` is green on the unmodified repo with no `JAV
 4. Add a root aggregator task: `tasks.register('buildAll') { dependsOn gradle.includedBuild('fabric-1.21.11').task(':build') }`, extended as modules land.
 5. Set `version = "${mod_version}+${minecraft_version}"` in each version module so jars are self-describing (`chatnotes-0.2.0+1.21.11.jar`).
 
-Gate: `./gradlew buildAll` produces the same 1.21.11 jar as before, `./gradlew :core:test` runs (empty core is fine), and `git log --follow` still tracks the moved files.
+Gate: **passed.** The jar was unzipped and diffed entry-by-entry against one built from the pre-move commit: every class and resource is byte-identical, and the only difference is the intended `fabric.mod.json` version string (`0.1.1` to `0.1.1+1.21.11`). `./gradlew :core:test` runs, `:fabric-1.21.11:test` still runs all 21 existing tests, and `git log --follow` tracks `NotesScreen.java` back through all 5 of its commits.
+
+Two things worth carrying forward:
+
+- **Relative paths silently broke on the move.** `jar { from("LICENSE") }` resolves against the project directory, which is now `versions/fabric-1.21.11/`, so `LICENSE_chatnotes` quietly disappeared from the jar with no error. Caught only by the entry-by-entry diff. The module now defines `def repoRoot = "$rootDir/../.."` for exactly this, and Phase 2 and 3 should route every shared `srcDirs` entry through it.
+- **Included builds do not inherit the root `gradle.properties`.** `versions/fabric-1.21.11/settings.gradle` loads it off disk and applies it in `gradle.beforeProject`, skipping `org.gradle.*` keys and anything already set, so `-Pmod_version=1.2.3` still wins. Verified. Every future version module needs the same block.
+
+CI had to move with the skeleton rather than wait for Phase 5, since `./gradlew build` at the root now builds only `:core`. `build.yml` and `release.yml` call `buildAll`, and the release workflow globs `versions/*/build/libs` into a `release-artifacts/` directory so new modules are attached without editing the workflow again.
 
 ### Phase 2 — Extract the core and refactor 1.21.11 onto it
 

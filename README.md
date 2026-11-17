@@ -67,19 +67,21 @@ These are the exact versions the project is built against. Check [fabricmc.net/d
 - Fabric Loader `0.18.2`
 - Fabric API `0.139.4+1.21.11`
 - Fabric Loom `1.14-SNAPSHOT`
-- Gradle `9.2.1` (via the wrapper)
+- Gradle `9.8.2` (via the wrapper, which provisions its own JDK 25 for the daemon)
 - Java `21` (Gradle toolchain; the build does not depend on your default `java`)
 - Mappings: **official Mojang mappings** (`loom.officialMojangMappings()`), not Yarn
 
 ## Building and running
 
 ```bash
-./gradlew build      # produces build/libs/chatnotes-<version>.jar
-./gradlew runClient  # launches a dev client with the mod loaded
-./gradlew test       # runs the unit tests for the storage layer
+./gradlew buildAll                        # builds :core and every version module
+./gradlew :core:test                      # version-independent unit tests, no Minecraft needed
+./gradlew :fabric-1.21.11:build           # one version module
+./gradlew :fabric-1.21.11:runClient       # launches a dev client with the mod loaded
 ```
 
-The dev client writes its game files to `run/`, which is git-ignored.
+Jars land in `versions/<module>/build/libs/`, named `chatnotes-<version>+<minecraft_version>.jar`.
+The dev client writes its game files to `versions/<module>/run/`, which is git-ignored.
 
 ## Layout
 
@@ -88,16 +90,19 @@ chat-notes-logo.png          # project / store logo
 media/
 ├── STORE_DESCRIPTION.md     # Modrinth / CurseForge copy
 └── screenshots/             # gallery PNGs (see SCREENSHOTS.md)
-src/main/java/com/imjpfeliciano/chatnotes/
-├── ChatNotesClient.java
-├── data/
-├── input/
-├── ui/
-└── util/
+core/                        # version-independent logic, unit tested without Minecraft
+versions/fabric-1.21.11/
+├── build.gradle             # Loom config + per-version toolchain
+├── src/main/java/com/imjpfeliciano/chatnotes/
+│   ├── ChatNotesClient.java
+│   ├── data/
+│   ├── input/
+│   ├── ui/
+│   └── util/
+└── src/main/resources/
+    ├── fabric.mod.json
+    └── assets/chatnotes/    # icon.png + lang (en_us, es_mx, es_es)
 docs/ARCHITECTURE.md
-src/main/resources/
-├── fabric.mod.json
-└── assets/chatnotes/        # icon.png + lang (en_us, es_mx, es_es)
 ```
 
 No mixins. The mod is built entirely on public Minecraft and Fabric API surfaces.
