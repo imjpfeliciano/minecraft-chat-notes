@@ -10,7 +10,10 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Core is plain Java, and the 1.21 screen layer must not import a loader. */
+/**
+ * Core is plain Java. The shared screen layers must not name a loader, so a future NeoForge
+ * module can compile {@code shared/mc26} without Fabric on the classpath.
+ */
 class CoreBoundaryTest {
 
     @Test
@@ -19,13 +22,13 @@ class CoreBoundaryTest {
     }
 
     @Test
-    void mc121DoesNotImportFabric() throws IOException {
-        assertNoImports(Path.of("../shared/mc121/src/main/java"), "import net.fabricmc");
+    void mc121DoesNotNameALoader() throws IOException {
+        assertNoImports(Path.of("../shared/mc121/src/main/java"), "net.fabricmc", "net.neoforged");
     }
 
     @Test
-    void mc26DoesNotImportFabric() throws IOException {
-        assertNoImports(Path.of("../shared/mc26/src/main/java"), "import net.fabricmc");
+    void mc26DoesNotNameALoader() throws IOException {
+        assertNoImports(Path.of("../shared/mc26/src/main/java"), "net.fabricmc", "net.neoforged");
     }
 
     private static void assertNoImports(Path root, String... banned) throws IOException {
