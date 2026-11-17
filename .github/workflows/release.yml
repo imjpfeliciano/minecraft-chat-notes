@@ -1,6 +1,6 @@
 # Manually publish a GitHub Release from the Actions tab.
 # Actions → release → Run workflow → enter version (e.g. 0.1.1).
-# This bumps mod_version, pushes a v* tag, builds the remapped JAR, and attaches it to the release.
+# This bumps mod_version, pushes a v* tag, builds one jar per version module, and attaches them to the release.
 
 name: release
 on:
@@ -88,13 +88,15 @@ jobs:
       - name: build
         run: ./gradlew buildAll -Pmod_version=${{ steps.version.outputs.version }}
 
-      - name: collect remapped jars
+      - name: collect mod jars
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
           mkdir -p release-artifacts
-          # One jar per version module. Globbing versions/* means new modules are picked up
-          # without touching this workflow.
+          # One jar per version module. Globbing versions/* means a new module is attached
+          # without editing the copy loop. The list below only checks that the modules
+          # this release knows about actually produced a jar.
           count=0
-          # Each module names its own jar (ChatNotes-Fabric-mc1.21.11-v0.1.1.jar); this only collects them.
           while IFS= read -r -d '' jar; do
             base=$(basename "$jar")
             case "$base" in
@@ -105,8 +107,24 @@ jobs:
             echo "Selected $base"
           done < <(find versions/*/build/libs -maxdepth 1 -type f -name '*.jar' -print0)
           if [ "$count" -eq 0 ]; then
-            echo "No remapped mod JAR found under versions/*/build/libs" >&2
+            echo "No mod JAR found under versions/*/build/libs" >&2
             ls -la versions/*/build/libs || true
+            exit 1
+          fi
+          missing=0
+          for expected in \
+            "ChatNotes-Fabric-mc1.21.11-v${VERSION}.jar" \
+            "ChatNotes-Fabric-mc26.1-v${VERSION}.jar" \
+            "ChatNotes-Fabric-mc26.2-v${VERSION}.jar" \
+            "ChatNotes-Fabric-mc26.3-v${VERSION}.jar"
+          do
+            if [ ! -f "release-artifacts/$expected" ]; then
+              echo "Missing $expected" >&2
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            ls -la release-artifacts versions/*/build/libs || true
             exit 1
           fi
           ls -la release-artifacts
