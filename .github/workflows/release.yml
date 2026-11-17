@@ -1,6 +1,8 @@
 # Manually publish a GitHub Release from the Actions tab.
 # Actions → release → Run workflow → enter version (e.g. 0.1.1).
-# This bumps mod_version, pushes a v* tag, builds one jar per version module, and attaches them to the release.
+# This bumps mod_version, builds one jar per version module, then creates the v* tag
+# and attaches every jar to one GitHub Release. The tag is created by the release
+# step, after the jars exist, so a failed build does not leave a tag behind.
 
 name: release
 on:
@@ -31,7 +33,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          # Push the version bump + tag back to the branch selected in "Run workflow".
+          # Push the version bump back to the branch selected in "Run workflow".
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: validate version
@@ -51,12 +53,11 @@ jobs:
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "tag=v${VERSION}" >> "$GITHUB_OUTPUT"
 
-      - name: bump mod_version and tag
+      - name: bump mod_version
+        id: bump
         env:
           VERSION: ${{ steps.version.outputs.version }}
-          TAG: ${{ steps.version.outputs.tag }}
         run: |
-          # Annotated tags need an identity even when the version bump is skipped.
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           if grep -q "^mod_version=${VERSION}$" gradle.properties; then
@@ -67,8 +68,7 @@ jobs:
             git commit -m "chore(release): bump mod_version to ${VERSION}"
             git push origin "HEAD:${GITHUB_REF_NAME}"
           fi
-          git tag -a "$TAG" -m "Chat Notes ${VERSION}"
-          git push origin "$TAG"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: validate gradle wrapper
         uses: gradle/actions/wrapper-validation@v4
@@ -94,9 +94,8 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           mkdir -p release-artifacts
-          # One jar per version module. Globbing versions/* means a new module is attached
-          # without editing the copy loop. The list below only checks that the modules
-          # this release knows about actually produced a jar.
+          # One jar per version module. A new directory under versions/ is picked up
+          # from its own gradle.properties; this list does not name the modules.
           count=0
           while IFS= read -r -d '' jar; do
             base=$(basename "$jar")
@@ -112,13 +111,12 @@ jobs:
             ls -la versions/*/build/libs || true
             exit 1
           fi
+          mod_name=$(sed -n 's/^mod_name=//p' gradle.properties | tr -d ' ')
           missing=0
-          for expected in \
-            "ChatNotes-Fabric-mc1.21.11-v${VERSION}.jar" \
-            "ChatNotes-Fabric-mc26.1-v${VERSION}.jar" \
-            "ChatNotes-Fabric-mc26.2-v${VERSION}.jar" \
-            "ChatNotes-Fabric-mc26.3-v${VERSION}.jar"
-          do
+          for props in versions/*/gradle.properties; do
+            mc=$(sed -n 's/^minecraft_version=//p' "$props")
+            loader=$(sed -n 's/^loader_name=//p' "$props")
+            expected="${mod_name}-${loader}-mc${mc}-v${VERSION}.jar"
             if [ ! -f "release-artifacts/$expected" ]; then
               echo "Missing $expected" >&2
               missing=1
@@ -134,6 +132,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.tag }}
+          target_commitish: ${{ steps.bump.outputs.sha }}
           name: Chat Notes ${{ steps.version.outputs.version }}
           generate_release_notes: true
           prerelease: ${{ inputs.prerelease }}
