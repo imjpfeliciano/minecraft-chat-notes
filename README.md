@@ -64,6 +64,8 @@ Ready-to-paste Modrinth / CurseForge / GitHub blurb (EN + ES): [media/STORE_DESC
 These are the exact versions the project is built against. Check [fabricmc.net/develop](https://fabricmc.net/develop) before bumping any of them.
 
 - Minecraft `1.21.11` — Fabric Loader `0.18.2`, Fabric API `0.139.4+1.21.11`, Loom `1.14-SNAPSHOT`, Java `21`, official Mojang mappings
+- Minecraft `26.1` — Fabric Loader `0.20.1`, Fabric API `0.155.3+26.1.2`, Loom `1.19.4`, Java `25`, unobfuscated (no mappings line)
+- Minecraft `26.2` — Fabric Loader `0.20.1`, Fabric API `0.161.0+26.2`, Loom `1.19.4`, Java `25`, unobfuscated (no mappings line)
 - Minecraft `26.3` — Fabric Loader `0.20.1`, Fabric API `0.166.2+26.3`, Loom `1.19.4`, Java `25`, unobfuscated (no mappings line)
 - Gradle `9.8.2` (via the wrapper, which provisions its own JDK 25 for the daemon)
 
@@ -73,8 +75,12 @@ These are the exact versions the project is built against. Check [fabricmc.net/d
 ./gradlew buildAll                        # builds :core and every version module
 ./gradlew :core:test                      # version-independent unit tests, no Minecraft needed
 ./gradlew :fabric-1.21.11:build           # the 1.21.11 module
+./gradlew :versions:fabric-26.1:build     # the 26.1 module
+./gradlew :versions:fabric-26.2:build     # the 26.2 module
 ./gradlew :versions:fabric-26.3:build     # the 26.3 module
 ./gradlew :fabric-1.21.11:runClient       # launches a 1.21.11 dev client
+./gradlew :versions:fabric-26.1:runClient # launches a 26.1 dev client
+./gradlew :versions:fabric-26.2:runClient # launches a 26.2 dev client
 ./gradlew :versions:fabric-26.3:runClient # launches a 26.3 dev client
 ```
 
@@ -95,6 +101,8 @@ shared/
 ├── mc26/                    # abstract screens + GuiGraphicsExtractor painter
 └── fabric26/                # Fabric bootstrap for 26.x (KeyMappingHelper)
 versions/fabric-1.21.11/     # included build; thin screens call minecraft.setScreen
+versions/fabric-26.1/        # subproject; thin screens call minecraft.setScreen
+versions/fabric-26.2/        # subproject; thin screens call minecraft.gui.setScreen
 versions/fabric-26.3/        # subproject; thin screens call minecraft.gui.setScreen
                              # each module has its own build.gradle, fabric.mod.json, lang, and icon
 docs/ARCHITECTURE.md

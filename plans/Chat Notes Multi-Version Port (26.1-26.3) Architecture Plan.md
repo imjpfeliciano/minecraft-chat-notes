@@ -211,13 +211,19 @@ What landed:
 
 Gate: **build and launch passed; the click-through matrix was not run.** `:versions:fabric-26.3:build` produces `ChatNotes-Fabric-mc26.3-v0.1.1.jar`, and `fabric.mod.json` inside it has version `0.1.1` with `"minecraft": "~26.3"`. `:versions:fabric-26.3:runClient` reaches `[Chat Notes] Client init complete (1 notes)` and seeds the demo note, because `versions/fabric-26.3/run/` starts empty. The QA matrix below still has to be confirmed in that client.
 
-### Phase 4 — 26.2 and 26.1
+### Phase 4 — 26.2 and 26.1 — **both played in-game**
 
 1. Copy `versions/fabric-26.3/` to `versions/fabric-26.2/`, change `minecraft_version=26.2` and `fabric_version=0.161.0+26.2`, and `"minecraft": "~26.2"`. The hooks are identical to 26.3.
 2. Copy again for 26.1 with `fabric_version=0.155.3+26.1.2` and `"minecraft": ">=26.1 <26.2"` so 26.1.1 and 26.1.2 are covered. Override `openScreen` to `minecraft.setScreen(s)` — this is the one real divergence.
 3. If 26.1 turns up any additional break, fix it by adding a hook to `shared/mc26`, never by forking the shared file.
 
-Gate: all three modules build, each `runClient` launches on its own version, and the QA matrix passes on 26.1 and 26.2.
+What landed:
+
+- `shared/fabric26` no longer names `InputConstants.Type.KEYBOARD` or calls `client.gui.setScreen`. The keybind is `new KeyMapping(name, InputConstants.KEY_K, Category.MISC)`, which selects `KEYSYM` on 26.1/26.2 and `KEYBOARD` on 26.3. The version module passes a `ScreenDisplay`: 26.1 calls `Minecraft.setScreen`, 26.2 and 26.3 call `Minecraft.gui.setScreen`.
+- `versions/fabric-26.1` is a copy of 26.3 with those two calls swapped and `"minecraft": ">=26.1 <26.2"`. The user played it: notes were edited and Use put text in chat. No extra API break showed up.
+- `versions/fabric-26.2` is a copy of 26.3 with `minecraft_version=26.2`, Fabric API `0.161.0+26.2`, and `"minecraft": "~26.2"`. `:versions:fabric-26.2:build` produces `ChatNotes-Fabric-mc26.2-v0.1.1.jar`.
+
+Gate: **both modules build and were played.** 26.2 `runClient` reached client init, and in that session a note was added, two groups were created, and notes were updated. The full click-through matrix was not re-run.
 
 ### Phase 5 — CI, release, docs
 
