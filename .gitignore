@@ -1,3 +1,7 @@
+# toolchain verification sandbox
+
+.scratch/
+
 # gradle
 
 .gradle/
