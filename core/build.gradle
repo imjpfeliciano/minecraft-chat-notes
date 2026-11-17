@@ -14,6 +14,10 @@ repositories {
 }
 
 dependencies {
+	// NoteStoreFile speaks JSON. The version modules recompile this source against Minecraft's
+	// own Gson, so the version here only has to match the API those jars provide.
+	implementation 'com.google.code.gson:gson:2.11.0'
+
 	testImplementation platform("org.junit:junit-bom:${project.junit_version}")
 	testImplementation "org.junit.jupiter:junit-jupiter"
 	testRuntimeOnly "org.junit.platform:junit-platform-launcher"

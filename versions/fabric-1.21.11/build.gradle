@@ -6,13 +6,15 @@ plugins {
 // repo root. Everything shared (LICENSE now, core and shared sources from Phase 2) lives here.
 def repoRoot = "$rootDir/../.."
 
-// The Minecraft version is part of the jar name so a release can ship one artifact per
-// version without them colliding: chatnotes-0.1.1+1.21.11.jar.
-version = "${project.mod_version}+${project.minecraft_version}"
+// Published name: "ChatNotes-Fabric-mc1.21.11-v0.1.1.jar".
+// Gradle appends project.version, so the v prefix lives there and mc lives in the base name.
+// fabric.mod.json is expanded from mod_version below, without the prefix.
+// The release workflow passes -Pmod_version. Loader and game version come from this module.
+version = "v${project.mod_version}"
 group = project.maven_group
 
 base {
-	archivesName = project.archives_base_name
+	archivesName = "${project.mod_name.replace(' ', '')}-${project.loader_name}-mc${project.minecraft_version}"
 }
 
 repositories {
@@ -28,24 +30,28 @@ loom {
 	}
 }
 
+// Compiled again here, against this version's Minecraft, rather than consumed as a jar.
+sourceSets.main {
+	java.srcDirs += [
+			"$repoRoot/core/src/main/java",
+			"$repoRoot/shared/mc121/src/main/java",
+			"$repoRoot/shared/fabric121/src/main/java"
+	]
+}
+
 dependencies {
 	// To change the versions see the gradle.properties file
 	minecraft "com.mojang:minecraft:${project.minecraft_version}"
 	mappings loom.officialMojangMappings()
 	modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
 	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
-
-	// The data layer is plain Java, so it can be unit tested without launching Minecraft.
-	testImplementation platform("org.junit:junit-bom:${project.junit_version}")
-	testImplementation "org.junit.jupiter:junit-jupiter"
-	testRuntimeOnly "org.junit.platform:junit-platform-launcher"
 }
 
 processResources {
-	inputs.property "version", project.version
+	inputs.property "version", project.mod_version
 
 	filesMatching("fabric.mod.json") {
-		expand "version": inputs.properties.version
+		expand "version": project.mod_version
 	}
 }
 
@@ -60,10 +66,6 @@ java {
 	}
 
 	withSourcesJar()
-}
-
-test {
-	useJUnitPlatform()
 }
 
 jar {
