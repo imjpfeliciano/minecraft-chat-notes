@@ -190,7 +190,7 @@ What landed:
 
 Gate: **build passed; the client boots and loads the existing file; the click-through matrix was not re-run.** `./gradlew :core:test` is green (42 tests, including the moved store tests) and `./gradlew buildAll` produces `chatnotes-0.1.1+1.21.11.jar`. `:fabric-1.21.11:runClient` reaches `[Chat Notes] Client init complete (2 notes)` against the `notes.json` already in `run/config/chatnotes/`, so the moved store reads a file written before the extraction and the path is unchanged. The click-through matrix below (keybind, list, editor, groups, copy, use) still has to be confirmed in that client before this is called behaviour-preserving.
 
-### Phase 3 — The 26.3 Fabric port
+### Phase 3 — The 26.3 Fabric port — **build and launch done; QA matrix still open**
 
 1. Create `versions/fabric-26.3/` with `plugins { id 'net.fabricmc.fabric-loom' version '1.19.4' }`, no `mappings` line, `implementation` (not `modImplementation`) for loader and API, `options.release = 25`, toolchain 25, and the `loom { mods { "chatnotes" { sourceSet sourceSets.main } } }` block (confirmed to still exist in the non-remap plugin).
 2. `fabric.mod.json`: `"minecraft": "~26.3"`, `"java": ">=25"`, `"fabricloader": ">=0.20.1"`, `"environment": "client"`, same id, icon and entrypoint shape as today.
@@ -201,7 +201,15 @@ Gate: **build passed; the client boots and loads the existing file; the click-th
 
 Verify as you go, cheaply: the 26.x jars are unobfuscated, so `javap -cp <module>/.gradle/loom-cache/minecraftMaven/net/minecraft/minecraft-clientOnly-<hash>/26.3/*.jar net.minecraft.client.gui.GuiGraphicsExtractor` answers any signature question directly, with no mappings step. Treat `./gradlew :versions:fabric-26.3:compileJava` as the real check. Both of the semantics this phase used to guess at were settled in Phase 0: `outline` is `(x, y, width, height, argb)` and `text` carries a `boolean` shadow overload while `centeredText` does not.
 
-Gate: `:versions:fabric-26.3:build` green, `:versions:fabric-26.3:runClient` launches, and the full manual QA matrix passes on 26.3.
+What landed:
+
+- `versions/fabric-26.3` is a root subproject (`include 'versions:fabric-26.3'`), not an included build. Loom `1.19.4` is pinned as a literal in the `plugins` block. Its `gradle.properties` is not auto-loaded, so `build.gradle` reads the file itself for `minecraft_version`, `loader_version`, `fabric_version`, and `loader_name`. `mod_version` still comes from the root file, and `-Pmod_version` wins.
+- `shared/mc26` is the 1.21 screen layer with the render renames (`extractRenderState`, `extractBackground`, `extractContent`) and `ExtractorPainter` calling `text`, `centeredText`, `fill`, and `outline`. `shared/fabric26` registers the keybind through `KeyMappingHelper`.
+- The keybind constructor changed past what Phase 0 recorded: `InputConstants.Type.KEYSYM` is now `KEYBOARD`, and `org.lwjgl.glfw.GLFW` is not on the mod compile classpath. The default key is `InputConstants.KEY_K`. Opening the screen from the tick hook is `client.gui.setScreen`.
+- The five concrete screens implement `openScreen` as `minecraft.gui.setScreen`. `chatScreenWith` stays `new ChatScreen(text, false)`.
+- The boundary test now also rejects Fabric imports under `shared/mc26`.
+
+Gate: **build and launch passed; the click-through matrix was not run.** `:versions:fabric-26.3:build` produces `ChatNotes-Fabric-mc26.3-v0.1.1.jar`, and `fabric.mod.json` inside it has version `0.1.1` with `"minecraft": "~26.3"`. `:versions:fabric-26.3:runClient` reaches `[Chat Notes] Client init complete (1 notes)` and seeds the demo note, because `versions/fabric-26.3/run/` starts empty. The QA matrix below still has to be confirmed in that client.
 
 ### Phase 4 — 26.2 and 26.1
 

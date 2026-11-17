@@ -63,21 +63,19 @@ Ready-to-paste Modrinth / CurseForge / GitHub blurb (EN + ES): [media/STORE_DESC
 
 These are the exact versions the project is built against. Check [fabricmc.net/develop](https://fabricmc.net/develop) before bumping any of them.
 
-- Minecraft `1.21.11`
-- Fabric Loader `0.18.2`
-- Fabric API `0.139.4+1.21.11`
-- Fabric Loom `1.14-SNAPSHOT`
+- Minecraft `1.21.11` — Fabric Loader `0.18.2`, Fabric API `0.139.4+1.21.11`, Loom `1.14-SNAPSHOT`, Java `21`, official Mojang mappings
+- Minecraft `26.3` — Fabric Loader `0.20.1`, Fabric API `0.166.2+26.3`, Loom `1.19.4`, Java `25`, unobfuscated (no mappings line)
 - Gradle `9.8.2` (via the wrapper, which provisions its own JDK 25 for the daemon)
-- Java `21` (Gradle toolchain; the build does not depend on your default `java`)
-- Mappings: **official Mojang mappings** (`loom.officialMojangMappings()`), not Yarn
 
 ## Building and running
 
 ```bash
 ./gradlew buildAll                        # builds :core and every version module
 ./gradlew :core:test                      # version-independent unit tests, no Minecraft needed
-./gradlew :fabric-1.21.11:build           # one version module
-./gradlew :fabric-1.21.11:runClient       # launches a dev client with the mod loaded
+./gradlew :fabric-1.21.11:build           # the 1.21.11 module
+./gradlew :versions:fabric-26.3:build     # the 26.3 module
+./gradlew :fabric-1.21.11:runClient       # launches a 1.21.11 dev client
+./gradlew :versions:fabric-26.3:runClient # launches a 26.3 dev client
 ```
 
 Jars land in `versions/<module>/build/libs/`, named `ChatNotes-<Loader>-mc<minecraft_version>-v<mod_version>.jar` (for example `ChatNotes-Fabric-mc1.21.11-v0.1.1.jar`). A release uses the version entered in the workflow.
@@ -93,13 +91,12 @@ media/
 core/                        # data, text, rules, painting. No Minecraft imports.
 shared/
 ├── mc121/                   # abstract screens + GuiGraphics painter (1.21 API)
-└── fabric121/               # Fabric bootstrap, keybind, config dir, clipboard
-versions/fabric-1.21.11/
-├── build.gradle             # Loom config; compiles core + shared as extra source dirs
-├── src/main/java/.../       # thin screen subclasses + the mod entrypoint
-└── src/main/resources/
-    ├── fabric.mod.json
-    └── assets/chatnotes/    # icon.png + lang (en_us, es_mx, es_es)
+├── fabric121/               # Fabric bootstrap for 1.21 (KeyBindingHelper)
+├── mc26/                    # abstract screens + GuiGraphicsExtractor painter
+└── fabric26/                # Fabric bootstrap for 26.x (KeyMappingHelper)
+versions/fabric-1.21.11/     # included build; thin screens call minecraft.setScreen
+versions/fabric-26.3/        # subproject; thin screens call minecraft.gui.setScreen
+                             # each module has its own build.gradle, fabric.mod.json, lang, and icon
 docs/ARCHITECTURE.md
 ```
 
