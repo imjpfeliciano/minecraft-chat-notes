@@ -93,13 +93,22 @@ jobs:
           mkdir -p release-artifacts
           # One jar per version module. Globbing versions/* means new modules are picked up
           # without touching this workflow.
-          found=$(find versions/*/build/libs -maxdepth 1 -type f -name 'chatnotes-*.jar' ! -name '*-sources.jar')
-          if [ -z "$found" ]; then
-            echo "No remapped chatnotes JAR found under versions/*/build/libs" >&2
+          count=0
+          # Each module names its own jar (ChatNotes-Fabric-mc1.21.11-v0.1.1.jar); this only collects them.
+          while IFS= read -r -d '' jar; do
+            base=$(basename "$jar")
+            case "$base" in
+              *-sources.jar|*-dev.jar) continue ;;
+            esac
+            cp "$jar" "release-artifacts/$base"
+            count=$((count + 1))
+            echo "Selected $base"
+          done < <(find versions/*/build/libs -maxdepth 1 -type f -name '*.jar' -print0)
+          if [ "$count" -eq 0 ]; then
+            echo "No remapped mod JAR found under versions/*/build/libs" >&2
             ls -la versions/*/build/libs || true
             exit 1
           fi
-          echo "$found" | xargs -I {} cp {} release-artifacts/
           ls -la release-artifacts
 
       - name: create GitHub Release

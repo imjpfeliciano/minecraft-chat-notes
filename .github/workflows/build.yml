@@ -31,4 +31,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Artifacts
-          path: versions/*/build/libs/
+          # The remapped mod jar only. Sources jars stay out of the upload.
+          path: |
+            versions/*/build/libs/*.jar
+            !versions/*/build/libs/*-sources.jar
