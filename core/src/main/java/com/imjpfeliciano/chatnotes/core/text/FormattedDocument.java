@@ -54,6 +54,26 @@ public final class FormattedDocument {
         return out.toString();
     }
 
+    /** Plain runs in order, so the editor can paint the same styles the chat string stores. */
+    public List<TextSpan> spans() {
+        List<TextSpan> spans = new ArrayList<>(runs.size());
+        for (Run run : runs) {
+            if (run.text.isEmpty()) {
+                continue;
+            }
+            Style style = run.style;
+            spans.add(new TextSpan(
+                    run.text,
+                    style.color(),
+                    style.bold(),
+                    style.italic(),
+                    style.underlined(),
+                    style.strikethrough(),
+                    style.obfuscated()));
+        }
+        return List.copyOf(spans);
+    }
+
     /**
      * The chat string. Untouched notes return the text they were parsed from. After an edit,
      * the result uses only {@code &0}-{@code &f}, {@code &k} {@code &l} {@code &m} {@code &n}
@@ -78,13 +98,18 @@ public final class FormattedDocument {
 
     /**
      * Restyle {@code [start, end)}. An empty range does not change the text; the next
-     * {@link #insert} at that index uses the style.
+     * {@link #insert} at that index uses the style. Reset is the exception: with no
+     * selection it clears formatting on the whole message.
      */
     public void apply(int start, int end, TextFormat format) {
         int[] range = clamp(start, end);
         start = range[0];
         end = range[1];
         if (start == end) {
+            if (format == TextFormat.RESET) {
+                resetAll();
+                return;
+            }
             armCaret(start, format);
             return;
         }
@@ -165,6 +190,15 @@ public final class FormattedDocument {
         for (Run run : parse(clipboard).runs) {
             insertAt(index, run.text, run.style);
             index += run.text.length();
+        }
+        merge();
+    }
+
+    private void resetAll() {
+        pristine = false;
+        clearPending();
+        for (Run run : runs) {
+            run.style = Style.NONE;
         }
         merge();
     }

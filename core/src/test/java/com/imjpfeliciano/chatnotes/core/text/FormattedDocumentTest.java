@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class FormattedDocumentTest {
 
@@ -30,6 +31,40 @@ class FormattedDocumentTest {
     }
 
     @Test
+    void spansFollowThePlainTextAndKeepEachRunsStyle() {
+        FormattedDocument doc = FormattedDocument.parse("&e&l&o&n&m&kHi &cS1");
+        assertEquals("Hi S1", doc.plain());
+        TextSpan first = doc.spans().get(0);
+        assertEquals("Hi ", first.text());
+        assertEquals(0xFFFF55, first.color());
+        assertTrue(first.bold());
+        assertTrue(first.italic());
+        assertTrue(first.underlined());
+        assertTrue(first.strikethrough());
+        assertTrue(first.obfuscated());
+        TextSpan second = doc.spans().get(1);
+        assertEquals("S1", second.text());
+        assertEquals(0xFF5555, second.color());
+        assertFalse(second.bold());
+        assertFalse(second.italic());
+        assertFalse(second.underlined());
+        assertFalse(second.strikethrough());
+        assertFalse(second.obfuscated());
+    }
+
+    @Test
+    void stackedDecorationsSerializeInAStableOrderAfterTheColour() {
+        FormattedDocument doc = FormattedDocument.parse("X");
+        doc.apply(0, 1, TextFormat.ITALIC);
+        doc.apply(0, 1, TextFormat.OBFUSCATED);
+        doc.apply(0, 1, TextFormat.UNDERLINED);
+        doc.apply(0, 1, TextFormat.BOLD);
+        doc.apply(0, 1, TextFormat.STRIKETHROUGH);
+        doc.apply(0, 1, TextFormat.YELLOW);
+        assertEquals("&e&k&l&m&n&oX", doc.serialize());
+    }
+
+    @Test
     void yellowThenBoldWritesColorBeforeDecoration() {
         FormattedDocument doc = FormattedDocument.parse("GRANJA");
         doc.apply(0, 6, TextFormat.YELLOW);
@@ -48,6 +83,32 @@ class FormattedDocumentTest {
         doc.apply(0, 6, TextFormat.RESET);
         assertEquals("GRANJA", doc.plain());
         assertEquals("GRANJA", doc.serialize());
+    }
+
+    @Test
+    void resetWithNoSelectionClearsTheWholeMessage() {
+        FormattedDocument doc = FormattedDocument.parse("&e&lGRANJA &cS1");
+        doc.apply(7, 7, TextFormat.RESET);
+        assertEquals("GRANJA S1", doc.plain());
+        assertEquals("GRANJA S1", doc.serialize());
+    }
+
+    @Test
+    void resetOnASelectionClearsOnlyThatRange() {
+        FormattedDocument doc = FormattedDocument.parse("&e&lGRANJA &cS1");
+        doc.apply(0, 6, TextFormat.RESET);
+        assertEquals("GRANJA S1", doc.plain());
+        assertEquals("GRANJA&e&l &cS1", doc.serialize());
+    }
+
+    @Test
+    void deletingAMiddleRunLeavesTheRunsOnEitherSide() {
+        FormattedDocument doc = FormattedDocument.parse("AA BB CC");
+        doc.apply(0, 2, TextFormat.YELLOW);
+        doc.apply(6, 8, TextFormat.RED);
+        doc.delete(2, 6);
+        assertEquals("AACC", doc.plain());
+        assertEquals("&eAA&cCC", doc.serialize());
     }
 
     @Test
@@ -173,6 +234,20 @@ class FormattedDocumentTest {
         assertEquals("§aHello", section.serialize());
         section.apply(0, 5, TextFormat.BOLD);
         assertEquals("&a&lHello", section.serialize());
+
+        FormattedDocument nearest = FormattedDocument.parse("&#ff00aaHello");
+        nearest.apply(0, 5, TextFormat.BOLD);
+        assertEquals("&5&lHello", nearest.serialize());
+    }
+
+    @Test
+    void anEmptyEditLeavesAnUntouchedHexNoteByteForByte() {
+        String hex = "&#ff00aaHello";
+        FormattedDocument doc = FormattedDocument.parse(hex);
+        doc.delete(3, 3);
+        doc.insert(3, "");
+        doc.paste(3, "");
+        assertEquals(hex, doc.serialize());
     }
 
     @Test

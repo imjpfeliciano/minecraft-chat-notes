@@ -120,6 +120,8 @@ class NoteStoreTest {
         Note note = store.add("", "line one\n  line two\r\nline three");
 
         assertEquals("line one line two line three", note.text());
+        assertEquals("&#ff00aa &lHi", Note.normalizeText("&#ff00aa\n&lHi"));
+        assertEquals("", Note.normalizeText(null));
     }
 
     @Test
