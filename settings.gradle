@@ -8,3 +8,8 @@ pluginManagement {
 		gradlePluginPortal()
 	}
 }
+
+plugins {
+	// Lets Gradle download the JDKs the toolchain blocks ask for (21 here, 25 for the 26.x modules).
+	id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
+}
