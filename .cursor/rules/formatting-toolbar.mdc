@@ -1,0 +1,26 @@
+---
+description: Formatting toolbar contract for the note editor. Apply when changing colours, styles, the editor layout, or FormattedDocument.
+globs: shared/**/*.java,core/**/text/**/*.java,core/**/data/Note.java
+alwaysApply: false
+---
+
+# Formatting toolbar
+
+Palette is the 16 vanilla colours plus bold, italic, underline, strikethrough, obfuscated, and reset. Do not add RGB, hex, gradient, rainbow, MiniMessage, or `§` output.
+
+A colour code resets decorations in `AmpersandParser`, so the serializer writes the colour first and then decorations in order `k l m n o`. Yellow + bold is always `&e&l`. Applying a colour keeps decorations. A decoration turns off only when every character in the range already has it. Reset with no selection clears the whole message in the editor. A selection resets only that range. Neither writes `notes.json` until Save.
+
+`serialize()` returns the original string until `apply`, `insert`, `delete`, or `paste` changes it. An empty edit stays pristine. Untouched `&#RRGGBB`, `&x&...`, and `§` stay byte-for-byte. A rewrite maps other RGB to the nearest of the 16 (`&#ff00aa` + bold becomes `&5&lHello`). A literal `&` or `§` in plain text is stored as `&&` or `§§`.
+
+Indexes are offsets into `plain()`, not into the code string. `setValue` jumps the caret to the end, so a style-only update must not call it. Chat is one line: `Note.normalizeText` collapses line breaks to a space. Copy and Use send `note.text()` unchanged. The server plugin colours `&` codes; the preview is client-side only.
+
+Played layout, in both `shared/mc121` and `shared/mc26`:
+
+- Title field 75%, group button 25%.
+- Input and Output are side-by-side text areas about three lines tall. Enter does not insert a newline.
+- Style buttons sit above two rows of 8 swatches. Swatches are drawn, not widgets. Hit-test them in `mouseClicked` before `super`.
+- Paste, Save, and Cancel are equal columns at `height - 28`. Keep Paste. It parses the clipboard. A key paste into a focused field inserts the characters as typed.
+- Bold is one pixel wider. Caret, click, and selection use that styled width. Word breaks are whitespace only. Double-click selects a word, triple-click and Ctrl or Cmd+A select all. A shortcut-modified character event must not insert that character.
+- Ignore a preedit whose text equals the clipboard (`ClipboardPreedit`). Leave any remaining macOS suggestion alone.
+
+`plans/Chat Notes Formatting Toolbar Plan.md` still describes the first sketch (separate preview, single-line `EditBox`). The screens and this rule are the contract. Add tests in `FormattedDocumentTest` and run `./gradlew :core:test`.

@@ -25,6 +25,8 @@ The formatter never writes `§`, `&#RRGGBB`, or `&x&...`. Existing notes that al
 
 ## Layout
 
+The list below is the first sketch. The played editor is `AbstractNoteEditScreen` in `shared/mc121` and `shared/mc26`, and `.cursor/rules/formatting-toolbar.mdc` is the contract agents should follow. Input and Output are side-by-side text areas, there is no separate preview panel, Enter does not insert a newline, and the bottom Paste button stays.
+
 Under the group picker, first on the 1.21.11 editor:
 
 - One row of style buttons, then two rows of 8 swatches (drawn with `Painter.fill`, clicked in `mouseClicked`)

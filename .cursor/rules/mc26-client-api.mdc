@@ -1,0 +1,19 @@
+---
+description: Minecraft 26.x client API traps for screens, mouse, keyboard, and access wideners. A 26.2 client does not prove 26.3 input.
+globs: shared/mc26/**/*.java,versions/fabric-26*/**
+alwaysApply: false
+---
+
+# 26.x client API
+
+`shared/mc26` is one source tree compiled by 26.1, 26.2, and 26.3. Input is not the same on all three. Playtest each client when a change touches mouse, keyboard, or opening a screen. `unset JAVA_HOME` before Gradle so the daemon is Java 25.
+
+Access wideners: 1.21.11 uses `accessWidener v2 named`. Every 26.x widener uses `accessWidener v2 official`. `named` fails configure. Point `loom.accessWidenerPath` and `fabric.mod.json` `accessWidener` at that file. Widen the `MultiLineEditBox` constructor, its `textField`, and `accessible class net/minecraft/client/gui/components/MultilineTextField$StringView`. The class file is public, but the InnerClasses attribute is protected, so the compiler rejects it without that line. Do not override `setCharacterLimit` or `setValueListener`; they are already public.
+
+Opening a screen: 26.1 has `Minecraft.setScreen`. 26.2 and 26.3 use `minecraft.gui.setScreen`.
+
+`CharacterEvent` on 26.x has a codepoint and no modifiers. Read Ctrl and Cmd from `KeyShortcuts.shortcutDown()` in that version module, package `com.imjpfeliciano.chatnotes.ui`. 26.1 and 26.2 call `InputConstants.isKeyDown(Window, int)` with `KEY_LCONTROL`, `KEY_RCONTROL`, `KEY_LSUPER`, and `KEY_RSUPER`. 26.3 calls `isKeyDown(int)` and Cmd is `KEY_LGUI` / `KEY_RGUI`. Shared code cannot call either signature.
+
+Left click is button 0 on 26.1 and 26.2, and button 1 on 26.3. Compare with `InputConstants.MOUSE_BUTTON_LEFT`. Never hardcode `0`. Style buttons already use the version's `isValidClickButton`. If those work and the colour swatches do not, the button id is the first check.
+
+Language files are copied per module under `versions/fabric-*/src/main/resources/assets/chatnotes/lang/`. A new editor string has to land in `en_us`, `es_mx`, and `es_es` for 1.21.11 and all three 26.x modules. Do not change `Painter` unless `shared/mc121` and `shared/mc26` both implement it. CI builds every version.
