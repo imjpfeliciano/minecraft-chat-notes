@@ -38,7 +38,13 @@ public final class FabricChatNotes {
         Screen open(NoteStore store);
     }
 
-    public static void start(NotesOpener opener) {
+    /** How this Minecraft build shows a screen. 26.1 uses {@code Minecraft.setScreen}; 26.2+ uses {@code Minecraft.gui}. */
+    @FunctionalInterface
+    public interface ScreenDisplay {
+        void open(Screen screen);
+    }
+
+    public static void start(NotesOpener opener, ScreenDisplay display) {
         Path notesFile = new FabricConfigPaths().configDir().resolve("chatnotes/notes.json");
         try {
             store = NoteStore.open(notesFile);
@@ -57,7 +63,7 @@ public final class FabricChatNotes {
             LOG.info("[Chat Notes] Seeded demo note for vertical-slice testing.");
         }
 
-        KeyBindings.register(opener, store, LOG);
+        KeyBindings.register(opener, display, store, LOG);
         LOG.info("[Chat Notes] Client init complete ({} notes).", store.notes().size());
     }
 

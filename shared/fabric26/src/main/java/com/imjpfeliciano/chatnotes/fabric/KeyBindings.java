@@ -17,11 +17,10 @@ public final class KeyBindings {
 
     private KeyBindings() {}
 
-    public static void register(FabricChatNotes.NotesOpener opener, NoteStore store, ModLog log) {
+    public static void register(FabricChatNotes.NotesOpener opener, FabricChatNotes.ScreenDisplay display, NoteStore store, ModLog log) {
         openNotes = KeyMappingHelper.registerKeyMapping(
                 new KeyMapping(
                         "key.chatnotes.open",
-                        InputConstants.Type.KEYBOARD,
                         InputConstants.KEY_K,
                         KeyMapping.Category.MISC));
 
@@ -32,7 +31,7 @@ public final class KeyBindings {
                     continue;
                 }
                 log.debug("[Chat Notes] Open-notes key pressed.");
-                client.gui.setScreen(opener.open(store));
+                display.open(opener.open(store));
             }
         });
     }
