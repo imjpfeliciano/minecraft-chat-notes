@@ -75,8 +75,12 @@ jobs:
       - name: setup jdk
         uses: actions/setup-java@v4
         with:
-          java-version: '21'
-          distribution: 'microsoft'
+          # 25 runs the Gradle daemon, which Loom 1.19 requires; 21 is the compile
+          # toolchain for the 1.21.11 module. Installing both avoids a foojay download.
+          java-version: |
+            21
+            25
+          distribution: 'temurin'
 
       - name: make gradle wrapper executable
         run: chmod +x ./gradlew
