@@ -86,19 +86,21 @@ jobs:
         run: chmod +x ./gradlew
 
       - name: build
-        run: ./gradlew build -Pmod_version=${{ steps.version.outputs.version }}
+        run: ./gradlew buildAll -Pmod_version=${{ steps.version.outputs.version }}
 
-      - name: select remapped jar
-        id: jar
+      - name: collect remapped jars
         run: |
-          jar=$(find build/libs -maxdepth 1 -type f -name 'chatnotes-*.jar' ! -name '*-sources.jar' | head -n 1)
-          if [ -z "$jar" ]; then
-            echo "No remapped chatnotes JAR found in build/libs" >&2
-            ls -la build/libs || true
+          mkdir -p release-artifacts
+          # One jar per version module. Globbing versions/* means new modules are picked up
+          # without touching this workflow.
+          found=$(find versions/*/build/libs -maxdepth 1 -type f -name 'chatnotes-*.jar' ! -name '*-sources.jar')
+          if [ -z "$found" ]; then
+            echo "No remapped chatnotes JAR found under versions/*/build/libs" >&2
+            ls -la versions/*/build/libs || true
             exit 1
           fi
-          echo "path=$jar" >> "$GITHUB_OUTPUT"
-          echo "Selected $jar"
+          echo "$found" | xargs -I {} cp {} release-artifacts/
+          ls -la release-artifacts
 
       - name: create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -107,4 +109,4 @@ jobs:
           name: Chat Notes ${{ steps.version.outputs.version }}
           generate_release_notes: true
           prerelease: ${{ inputs.prerelease }}
-          files: ${{ steps.jar.outputs.path }}
+          files: release-artifacts/*.jar
