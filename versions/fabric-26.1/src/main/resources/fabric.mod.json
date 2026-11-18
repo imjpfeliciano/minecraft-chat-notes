@@ -10,6 +10,7 @@
   "license": "MIT",
   "icon": "assets/chatnotes/icon.png",
   "environment": "client",
+  "accessWidener": "chatnotes.accesswidener",
   "entrypoints": {
     "client": [
       "com.imjpfeliciano.chatnotes.ChatNotesClient"
