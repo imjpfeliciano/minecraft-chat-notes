@@ -20,7 +20,7 @@ Played layout, in both `shared/mc121` and `shared/mc26`:
 - Input and Output are side-by-side text areas about three lines tall. Enter does not insert a newline.
 - Style buttons sit above two rows of 8 swatches. Swatches are drawn, not widgets. Hit-test them in `mouseClicked` before `super`.
 - Paste, Save, and Cancel are equal columns at `height - 28`. Keep Paste. It parses the clipboard. A key paste into a focused field inserts the characters as typed.
-- Bold is one pixel wider. Caret, click, and selection use that styled width. Word breaks are whitespace only. Double-click selects a word, triple-click and Ctrl or Cmd+A select all. A shortcut-modified character event must not insert that character.
+- Bold is one pixel wider. Caret, click, selection, and wrapping use that styled width, so a bold line breaks onto the next row before the field clips it. Word breaks are whitespace only. Double-click selects a word, triple-click and Ctrl or Cmd+A select all. A shortcut-modified character event must not insert that character.
 - Ignore a preedit whose text equals the clipboard (`ClipboardPreedit`). Leave any remaining macOS suggestion alone.
 
 `plans/Chat Notes Formatting Toolbar Plan.md` still describes the first sketch (separate preview, single-line `EditBox`). The screens and this rule are the contract. Add tests in `FormattedDocumentTest` and run `./gradlew :core:test`.
