@@ -83,11 +83,33 @@ jobs:
             25
           distribution: 'temurin'
 
+      - name: setup gradle
+        uses: gradle/actions/setup-gradle@v4
+
       - name: make gradle wrapper executable
         run: chmod +x ./gradlew
 
+      # The same 429 burst that fails the matrix build can fail this single buildAll.
       - name: build
-        run: ./gradlew buildAll -Pmod_version=${{ steps.version.outputs.version }}
+        run: |
+          set +e
+          log=$(mktemp)
+          for attempt in 1 2 3; do
+            ./gradlew buildAll -Pmod_version=${{ steps.version.outputs.version }} 2>&1 | tee "$log"
+            status=${PIPESTATUS[0]}
+            if [ "$status" -eq 0 ]; then
+              exit 0
+            fi
+            if ! grep -q "Too Many Requests" "$log"; then
+              exit "$status"
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              exit "$status"
+            fi
+            wait=$((attempt * 30))
+            echo "Maven Central returned 429 (attempt ${attempt}). Retrying in ${wait}s."
+            sleep "$wait"
+          done
 
       - name: collect mod jars
         env:

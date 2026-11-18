@@ -37,10 +37,32 @@ jobs:
             21
             25
           distribution: 'temurin'
+      - name: setup gradle
+        uses: gradle/actions/setup-gradle@v4
       - name: make gradle wrapper executable
         run: chmod +x ./gradlew
+      # Five jobs configure the included 1.21.11 build at once. Maven Central answers
+      # that burst with 429, and Gradle does not wait long enough to get through it.
       - name: build
-        run: ./gradlew ${{ matrix.task }}
+        run: |
+          set +e
+          log=$(mktemp)
+          for attempt in 1 2 3; do
+            ./gradlew ${{ matrix.task }} 2>&1 | tee "$log"
+            status=${PIPESTATUS[0]}
+            if [ "$status" -eq 0 ]; then
+              exit 0
+            fi
+            if ! grep -q "Too Many Requests" "$log"; then
+              exit "$status"
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              exit "$status"
+            fi
+            wait=$((attempt * 30))
+            echo "Maven Central returned 429 (attempt ${attempt}). Retrying in ${wait}s."
+            sleep "$wait"
+          done
       - name: capture build artifacts
         if: matrix.module != 'core'
         uses: actions/upload-artifact@v4
