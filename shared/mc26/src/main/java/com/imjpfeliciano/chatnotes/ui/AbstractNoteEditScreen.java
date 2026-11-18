@@ -395,6 +395,7 @@ public abstract class AbstractNoteEditScreen extends Screen {
         }
         updating = false;
         refreshSaveState();
+        plainBox.reflowStyledLines();
     }
 
     private void placeCaret(int index) {

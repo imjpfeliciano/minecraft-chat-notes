@@ -1,5 +1,6 @@
 package com.imjpfeliciano.chatnotes.ui;
 
+import com.imjpfeliciano.chatnotes.core.text.LineWrap;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
@@ -15,7 +16,8 @@ import net.minecraft.util.Util;
 
 /**
  * A three-line chat field. Enter does not insert a line break, because the saved message is one
- * chat line and the box wraps it. An optional {@link StyledText} paints the input in place.
+ * chat line and the box wraps it. An optional {@link StyledText} paints the input in place and
+ * wraps with those same widths, so bold glyphs move onto the next row instead of being clipped.
  */
 final class NoteTextArea extends MultiLineEditBox {
 
@@ -38,6 +40,31 @@ final class NoteTextArea extends MultiLineEditBox {
 
     void setStyledText(StyledText styledText) {
         this.styledText = styledText;
+        reflowStyledLines();
+    }
+
+    @Override
+    public void setValue(String value) {
+        super.setValue(value);
+        reflowStyledLines();
+    }
+
+    /**
+     * Vanilla rows are measured with an empty style, and bold is a pixel wider than that, so a
+     * long coloured line paints past the padding and the scissor cuts it off. Replace those rows
+     * with breaks from the widths this field actually draws.
+     */
+    void reflowStyledLines() {
+        if (styledText == null) {
+            return;
+        }
+        String value = textField.value();
+        int maxWidth = Math.max(1, getWidth() - totalInnerPadding());
+        textField.displayLines.clear();
+        for (LineWrap.Line line : LineWrap.wrap(value, maxWidth, (from, to) -> styledText.width(value, from, to))) {
+            textField.displayLines.add(new MultilineTextField.StringView(line.begin(), line.end()));
+        }
+        scrollCaretIntoView();
     }
 
     int[] selection() {
@@ -99,6 +126,12 @@ final class NoteTextArea extends MultiLineEditBox {
         }
         if (isSelectAll(event)) {
             selectAllText();
+            return true;
+        }
+        if (styledText != null && (event.key() == InputConstants.KEY_UP || event.key() == InputConstants.KEY_DOWN)) {
+            if (!event.hasControlDownWithQuirk()) {
+                moveStyledLine(event.key() == InputConstants.KEY_UP ? -1 : 1, event.hasShiftDown());
+            }
             return true;
         }
         return super.keyPressed(event);
@@ -229,10 +262,32 @@ final class NoteTextArea extends MultiLineEditBox {
             return;
         }
         int target = (int) Math.floor(localX);
-        int best = chosen.beginIndex();
+        textField.seekCursor(Whence.ABSOLUTE, closestIndex(value, chosen.beginIndex(), chosen.endIndex(), target));
+    }
+
+    private void moveStyledLine(int delta, boolean selecting) {
+        String value = textField.value();
+        int count = textField.getLineCount();
+        if (count == 0) {
+            return;
+        }
+        int line = textField.getLineAtCursor();
+        if (line < 0) {
+            line = delta < 0 ? 0 : count - 1;
+        }
+        int targetLine = Math.max(0, Math.min(count - 1, line + delta));
+        MultilineTextField.StringView current = textField.getLineView(line);
+        MultilineTextField.StringView target = textField.getLineView(targetLine);
+        int x = widthOf(value, current.beginIndex(), Math.min(textField.cursor(), current.endIndex()));
+        textField.setSelecting(selecting);
+        textField.seekCursor(Whence.ABSOLUTE, closestIndex(value, target.beginIndex(), target.endIndex(), x));
+    }
+
+    private int closestIndex(String value, int begin, int end, int target) {
+        int best = begin;
         int bestDistance = Integer.MAX_VALUE;
-        for (int index = chosen.beginIndex(); index <= chosen.endIndex(); index++) {
-            int width = widthOf(value, chosen.beginIndex(), index);
+        for (int index = begin; index <= end; index++) {
+            int width = widthOf(value, begin, index);
             int distance = Math.abs(width - target);
             if (distance <= bestDistance) {
                 bestDistance = distance;
@@ -241,7 +296,24 @@ final class NoteTextArea extends MultiLineEditBox {
                 break;
             }
         }
-        textField.seekCursor(Whence.ABSOLUTE, best);
+        return best;
+    }
+
+    private void scrollCaretIntoView() {
+        int line = textField.getLineAtCursor();
+        if (line < 0) {
+            return;
+        }
+        double scroll = scrollAmount();
+        MultilineTextField.StringView top = textField.getLineView((int) (scroll / 9.0));
+        if (textField.cursor() <= top.beginIndex()) {
+            setScrollAmount(line * 9.0);
+            return;
+        }
+        MultilineTextField.StringView bottom = textField.getLineView((int) ((scroll + getHeight()) / 9.0) - 1);
+        if (textField.cursor() > bottom.endIndex()) {
+            setScrollAmount(line * 9.0 - getHeight() + 9.0 + totalInnerPadding());
+        }
     }
 
     private void selectAllText() {
